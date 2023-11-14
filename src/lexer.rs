@@ -1,4 +1,5 @@
 use std::fmt::{self, Display};
+use std::iter::Peekable;
 use std::str::CharIndices;
 
 use crate::utils::error::lex_err;
@@ -94,7 +95,7 @@ pub type LexTok<'a> = (Token, Span<'a>);
 // Container struct that consumes a string to create a list of tokens
 pub struct Lexer<'a> {
     input: &'a str,
-    chars: CharIndices<'a>,
+    chars: Peekable<CharIndices<'a>>,
     line: usize,
 }
 
@@ -110,9 +111,25 @@ impl<'a> Lexer<'a> {
     pub fn new(input: &'a str) -> Self {
         Self {
             input,
-            chars: input.char_indices(),
+            chars: input.char_indices().peekable(),
             line: 0,
         }
+    }
+
+    #[inline]
+    fn is_peek_digit(&mut self) -> bool {
+        self.chars.peek().map_or(false, |(_, c)| c.is_ascii_digit())
+    }
+
+    #[inline]
+    fn is_peek_var(&mut self) -> bool {
+        self.chars.peek().map_or(false, |&(_, c)| match c {
+            'a'..='z' => true,
+            'A'..='Z' => true,
+            '_' => true,
+            '0'..='9' => true,
+            _ => false,
+        })
     }
 
     // Main function, run to fully tokenize an input string
@@ -126,16 +143,8 @@ impl<'a> Lexer<'a> {
 
     fn maybe_op(&mut self, chr: char, start: usize) -> Option<LexTok<'a>> {
         match chr {
-            '-' if matches!(self.chars.clone().next(), Some((_, '0'..='9'))) => {
-                self.consume_number(chr, start)
-            }
-            ':' if matches!(
-                self.chars.clone().next(),
-                Some((_, 'a'..='z' | 'A'..='Z' | '_' | '0'..='9'))
-            ) =>
-            {
-                self.consume_word(chr, start)
-            }
+            '-' if self.is_peek_digit() => self.consume_number(chr, start),
+            ':' if self.is_peek_var() => self.consume_word(chr, start),
             '[' => Some(lex_tok!(Token::OpenBracket, self, start, 1, 0)),
             ']' => Some(lex_tok!(Token::CloseBracket, self, start, 1, 0)),
             '{' => Some(lex_tok!(Token::OpenCurly, self, start, 1, 0)),
@@ -143,7 +152,7 @@ impl<'a> Lexer<'a> {
             _ => {
                 if OP_MAP.contains_key(&chr.to_string()) {
                     let mut buf = chr.to_string();
-                    while let Some((_, chr)) = self.chars.clone().next() {
+                    while let Some(&(_, chr)) = self.chars.peek() {
                         buf.push(chr);
                         if OP_MAP.contains_key(&buf) {
                             self.chars.next();
@@ -162,6 +171,7 @@ impl<'a> Lexer<'a> {
         }
     }
 
+    #[inline]
     fn consume_token(&mut self) -> Option<LexTok<'a>> {
         let (start, chr) = self.chars.next()?;
         match chr {
@@ -185,8 +195,8 @@ impl<'a> Lexer<'a> {
 
     fn consume_number(&mut self, buf: char, start: usize) -> Option<LexTok<'a>> {
         let mut buf = buf.to_string();
-        while let Some((_, chr @ '0'..='9')) = self.chars.clone().next() {
-            buf.push(chr);
+        while self.is_peek_digit() {
+            buf.push(self.chars.next()?.1);
             self.chars.next();
         }
         if let Ok(n) = buf.parse() {
@@ -207,10 +217,8 @@ impl<'a> Lexer<'a> {
             offset = 0;
         }
 
-        while let Some((_, chr @ ('a'..='z' | 'A'..='Z' | '_' | '0'..='9'))) =
-            self.chars.clone().next()
-        {
-            buf.push(chr);
+        while self.is_peek_var() {
+            buf.push(self.chars.next()?.1);
             self.chars.next();
         }
 
