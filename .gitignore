@@ -1,0 +1,6 @@
+# Cargo generated files
+target/
+Cargo.lock
+
+# VSCode generated files
+.vscode/
