@@ -7,21 +7,21 @@ use crate::utils::error::lex_err;
 
 // Enum that represents the various types of tokens the `Lexer` can consume and return
 #[derive(Clone, Debug)]
-pub enum Token {
+pub enum Token<'a> {
     // Literal single word (the same as a one word string)
     // `:hello` equiv. `"hello"`
-    Word(String),
+    Word(&'a str),
     // Literal number
     // `15`, `-3`
-    Number(String),
+    Number(&'a str),
     // Register value, aka temporary variable for usage
     // `$x`, `$_for_i`
-    Register(String),
+    Register(&'a str),
     // Literal string, self explanatory
-    String(String),
+    String(&'a str),
     // Literal symbol
     // `for`, `print`, `add`, etc.
-    Symbol(String),
+    Symbol(&'a str),
     // Operators can be considered pseudo-macros for pre-defined symbols
     // e.g. `+` is the same as `add`.
     Op(Operator),
@@ -129,7 +129,7 @@ impl<'a> Display for Span<'a> {
 }
 
 // Type alias for the type used by the `Lexer`
-pub type LexTok<'a> = (Token, Span<'a>);
+pub type LexTok<'a> = (Token<'a>, Span<'a>);
 
 // Container struct that consumes a string to create a list of tokens
 pub struct Lexer<'a> {
@@ -186,7 +186,7 @@ impl<'a> Lexer<'a> {
         }
 
         match chr {
-            '0'..='9' => self.consume_number(chr, start),
+            '0'..='9' => self.consume_number(start),
             'a'..='z' | 'A'..='Z' => self.consume_word(chr, start),
             _ => lex_err!("Unrecognized token."; self.input, start, 1, self.line => self.line),
         }
@@ -198,7 +198,7 @@ impl<'a> Lexer<'a> {
                 self.chars.next();
                 Some(lex_tok!(Token::Define, self, start, 2, 0))
             }
-            '-' if self.is_peek_digit() => self.consume_number(chr, start),
+            '-' if self.is_peek_digit() => self.consume_number(start),
             ':' if self.is_peek_var() => self.consume_word(chr, start),
             '$' => self.consume_word(chr, start),
             '"' => self.consume_string(start),
@@ -206,7 +206,7 @@ impl<'a> Lexer<'a> {
             ']' => Some(lex_tok!(Token::CloseBracket, self, start, 1, 0)),
             '{' => Some(lex_tok!(Token::OpenCurly, self, start, 1, 0)),
             '}' => Some(lex_tok!(Token::CloseCurly, self, start, 1, 0)),
-            _ if OP_MAP.contains_key(&chr.to_string()) => self.consume_op(chr, start),
+            _ if OP_MAP.contains_key(&self.input[start..start + 1]) => self.consume_op(start),
             _ => {
                 lex_err!("Unrecognized token."; self.input, start, 1, self.line => self.line)
             }
@@ -224,54 +224,49 @@ impl<'a> Lexer<'a> {
         self.consume_token()
     }
 
-    fn consume_number(&mut self, buf: char, start: usize) -> Option<LexTok<'a>> {
-        let mut buf = buf.to_string();
+    fn consume_number(&mut self, start: usize) -> Option<LexTok<'a>> {
+        let mut end = start + 1;
         while self.is_peek_digit() {
-            buf.push(self.chars.next()?.1);
             self.chars.next();
+            end += 1;
         }
-        let len = buf.len();
-        Some(lex_tok!(Token::Number(buf), self, start, len, 0))
+        Some(lex_tok!(
+            Token::Number(&self.input[start..end]),
+            self,
+            start,
+            end - start,
+            0
+        ))
     }
 
     fn consume_word(&mut self, chr: char, start: usize) -> Option<LexTok<'a>> {
-        let mut buf;
-        let offset;
-        if chr == '$' || chr == ':' {
-            buf = String::new();
-            offset = 1;
-        } else {
-            buf = chr.to_string();
-            offset = 0;
-        }
-
+        let mut end = start + 1;
         while self.is_peek_var() {
-            buf.push(self.chars.next()?.1);
             self.chars.next();
+            end += 1;
         }
 
-        if buf.is_empty() {
+        if end - start == 1 {
             lex_err!("Missing identifier for register."; self.input, start, 1, self.line => self.line);
         }
 
-        let len = buf.len();
         Some(lex_tok!(
             match chr {
-                '$' => Token::Register(buf),
-                ':' => Token::Word(buf),
-                _ => Token::Symbol(buf),
+                '$' => Token::Register(&self.input[start + 1..end]),
+                ':' => Token::Word(&self.input[start + 1..end]),
+                _ => Token::Symbol(&self.input[start..end]),
             },
             self,
             start,
-            len + offset,
+            end - start,
             0
         ))
     }
 
     fn consume_string(&mut self, start: usize) -> Option<LexTok<'a>> {
-        let mut buf = String::new();
         let mut valid_str = false;
         let mut lines = 0;
+        let mut end = start + 2;
         while let Some((_, chr)) = self.chars.next() {
             if chr == '"' {
                 valid_str = true;
@@ -279,32 +274,35 @@ impl<'a> Lexer<'a> {
             } else if chr == '\n' {
                 lines += 1;
             }
-            buf.push(chr);
+            end += 1;
         }
 
         if !valid_str {
-            lex_err!("String not terminated."; self.input, start, buf.len(), self.line => self.line + lines);
+            lex_err!("String not terminated."; self.input, start, end - start, self.line => self.line + lines);
         }
 
-        self.line += lines;
-        let len = buf.len();
-        let tok = lex_tok!(Token::String(buf), self, start, len + 2, lines);
+        let tok = lex_tok!(
+            Token::String(&self.input[start + 1..end - 1]),
+            self,
+            start,
+            end - start,
+            lines
+        );
         self.line += lines;
         Some(tok)
     }
 
-    fn consume_op(&mut self, chr: char, start: usize) -> Option<LexTok<'a>> {
-        let mut buf = chr.to_string();
-        while let Some(&(_, chr)) = self.chars.peek() {
-            buf.push(chr);
-            if OP_MAP.contains_key(&buf) {
-                self.chars.next();
+    fn consume_op(&mut self, start: usize) -> Option<LexTok<'a>> {
+        let mut end = start + 1;
+        while self.chars.peek().is_some() {
+            if OP_MAP.contains_key(&self.input[start..end + 1]) {
+                end += 1;
                 continue;
             }
-            buf.pop();
+
             break;
         }
-        let (_, &op) = OP_MAP.get_entry(&buf)?;
-        Some(lex_tok!(Token::Op(op), self, start, buf.len(), 0))
+        let (_, &op) = OP_MAP.get_entry(&self.input[start..end])?;
+        Some(lex_tok!(Token::Op(op), self, start, end - start, 0))
     }
 }

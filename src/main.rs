@@ -5,7 +5,7 @@ pub mod utils;
 use lexer::{Lexer, Token};
 
 fn main() {
-    let mut lex = Lexer::new("5:x!.*$x:- 5");
+    let mut lex = Lexer::new(r#"5 :x ! . * "hello world" : $x : -"#);
     let tokens = lex
         .tokenize()
         .into_iter()
