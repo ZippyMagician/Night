@@ -3,7 +3,7 @@ use phf::phf_map;
 use super::Operator;
 
 macro_rules! define {
-    ($($rep:expr => ($lit:pat));*) => {
+    ($($rep:expr => ($lit:pat, $guard:expr));*) => {
         pub static OP_MAP: phf::Map<&'static str, crate::operator::Operator> = phf_map! {
             $(
                $rep => $lit
@@ -23,33 +23,33 @@ macro_rules! define {
 }
 
 define! {
-    "+" => (Operator::Add);
+    "+" => (Operator::Add, None);
 
-    "-" => (Operator::Sub);
+    "-" => (Operator::Sub, None);
 
-    "/" => (Operator::Div);
+    "/" => (Operator::Div, None);
 
-    "*" => (Operator::Mul);
+    "*" => (Operator::Mul, None);
 
-    "=" => (Operator::Eq);
+    "=" => (Operator::Eq, None);
 
-    "!=" => (Operator::Neq);
+    "!=" => (Operator::Neq, None);
 
-    ">" => (Operator::Gt);
+    ">" => (Operator::Gt, None);
 
-    "<" => (Operator::Lt);
+    "<" => (Operator::Lt, None);
 
-    ">=" => (Operator::Gte);
+    ">=" => (Operator::Gte, None);
 
-    "<=" => (Operator::Lte);
+    "<=" => (Operator::Lte, None);
 
-    "!" => (Operator::Assign);
+    "!" => (Operator::Assign, None);
 
-    ";" => (Operator::Pop);
+    ";" => (Operator::Pop, None);
 
-    ":" => (Operator::Swap);
+    ":" => (Operator::Swap, None);
 
-    "." => (Operator::Dup);
+    "." => (Operator::Dup, None);
 
-    "?" => (Operator::Call)
+    "?" => (Operator::Call, None)
 }
