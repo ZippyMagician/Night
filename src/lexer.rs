@@ -2,8 +2,47 @@ use std::fmt::{self, Display};
 use std::iter::Peekable;
 use std::str::CharIndices;
 
+use crate::operator::{Operator, OP_MAP};
 use crate::utils::error::lex_err;
-use crate::utils::token::{Token, OP_MAP};
+
+// Enum that represents the various types of tokens the `Lexer` can consume and return
+#[derive(Clone, Debug)]
+pub enum Token {
+    // Literal single word (the same as a one word string)
+    // `:hello` equiv. `"hello"`
+    Word(String),
+    // Literal number
+    // `15`, `-3`
+    Number(String),
+    // Register value, aka temporary variable for usage
+    // `$x`, `$_for_i`
+    Register(String),
+    // Literal string, self explanatory
+    String(String),
+    // Literal symbol
+    // `for`, `print`, `add`, etc.
+    Symbol(String),
+    // Operators can be considered pseudo-macros for pre-defined symbols
+    // e.g. `+` is the same as `add`.
+    Op(Operator),
+    // Literal newline. Has semantic meaning in some contexts, so this is necessary
+    // e.g. in `x <- : . + \n 1 2 3 x`, x's definition should end with the newline
+    Newline,
+    // Represents the `<-` symbol, for symbol assignment
+    Define,
+    // Represents the `{` punctuation
+    OpenCurly,
+    // Represents the `}` punctuation
+    CloseCurly,
+    // Represents the `[` punctuation
+    OpenBracket,
+    // Represents the `]` punctuation
+    CloseBracket,
+    // Represents the `(` punctuation
+    OpenParen,
+    // Represents the `)` punctuation
+    CloseParen,
+}
 
 // Struct representing where in the input string some `Token` actually is represented
 #[derive(Clone, Debug)]
@@ -137,42 +176,52 @@ impl<'a> Lexer<'a> {
         tokens
     }
 
+    #[inline]
+    fn consume_token(&mut self) -> Option<LexTok<'a>> {
+        let (start, chr) = self.chars.next()?;
+        if chr.is_whitespace() {
+            return self.consume_whitespace(chr, start);
+        } else if chr.is_ascii_punctuation() {
+            return self.maybe_op(chr, start);
+        }
+
+        match chr {
+            '0'..='9' => self.consume_number(chr, start),
+            'a'..='z' | 'A'..='Z' => self.consume_word(chr, start),
+            _ => lex_err!("Unrecognized token."; self.input, start, 1, self.line => self.line),
+        }
+    }
+
     fn maybe_op(&mut self, chr: char, start: usize) -> Option<LexTok<'a>> {
         match chr {
+            '<' if matches!(self.chars.peek(), Some((_, '-'))) => {
+                self.chars.next();
+                Some(lex_tok!(Token::Define, self, start, 2, 0))
+            }
             '-' if self.is_peek_digit() => self.consume_number(chr, start),
             ':' if self.is_peek_var() => self.consume_word(chr, start),
+            '$' => self.consume_word(chr, start),
+            '"' => self.consume_string(start),
             '[' => Some(lex_tok!(Token::OpenBracket, self, start, 1, 0)),
             ']' => Some(lex_tok!(Token::CloseBracket, self, start, 1, 0)),
             '{' => Some(lex_tok!(Token::OpenCurly, self, start, 1, 0)),
             '}' => Some(lex_tok!(Token::CloseCurly, self, start, 1, 0)),
             _ if OP_MAP.contains_key(&chr.to_string()) => self.consume_op(chr, start),
             _ => {
-                lex_err!("Unrecognized token."; self.input, start, 1, self.line => self.line);
-                None
+                lex_err!("Unrecognized token."; self.input, start, 1, self.line => self.line)
             }
         }
     }
 
-    #[inline]
-    fn consume_token(&mut self) -> Option<LexTok<'a>> {
-        let (start, chr) = self.chars.next()?;
-        match chr {
-            '0'..='9' => self.consume_number(chr, start),
-            '$' => self.consume_word(chr, start),
-            '"' => self.consume_string(start),
-            'a'..='z' | 'A'..='Z' => self.consume_word(chr, start),
-            '\n' => {
-                let tok = lex_tok!(Token::Newline, self, start, 1, 0);
-                self.line += 1;
-                Some(tok)
-            }
-            ' ' | '\t' => self.consume_token(),
-            c if c.is_ascii_punctuation() => self.maybe_op(chr, start),
-            _ => {
-                lex_err!("Unrecognized token."; self.input, start, 1, self.line => self.line);
-                None
-            }
+    fn consume_whitespace(&mut self, chr: char, start: usize) -> Option<LexTok<'a>> {
+        if chr == '\n' {
+            let tok = lex_tok!(Token::Newline, self, start, 1, 0);
+            self.line += 1;
+            return Some(tok);
         }
+
+        // Skip and consume from the next character
+        self.consume_token()
     }
 
     fn consume_number(&mut self, buf: char, start: usize) -> Option<LexTok<'a>> {
@@ -181,17 +230,14 @@ impl<'a> Lexer<'a> {
             buf.push(self.chars.next()?.1);
             self.chars.next();
         }
-        if let Ok(n) = buf.parse() {
-            Some(lex_tok!(Token::Number(n), self, start, buf.len(), 0))
-        } else {
-            None
-        }
+        let len = buf.len();
+        Some(lex_tok!(Token::Number(buf), self, start, len, 0))
     }
 
     fn consume_word(&mut self, chr: char, start: usize) -> Option<LexTok<'a>> {
         let mut buf;
         let offset;
-        if matches!(chr, '$' | ':') {
+        if chr == '$' || chr == ':' {
             buf = String::new();
             offset = 1;
         } else {
@@ -205,21 +251,21 @@ impl<'a> Lexer<'a> {
         }
 
         if buf.is_empty() {
-            None
-        } else {
-            let len = buf.len();
-            Some(lex_tok!(
-                match chr {
-                    '$' => Token::Register(buf),
-                    ':' => Token::Word(buf),
-                    _ => Token::Variable(buf),
-                },
-                self,
-                start,
-                len + offset,
-                0
-            ))
+            lex_err!("Missing identifier for register."; self.input, start, 1, self.line => self.line);
         }
+
+        let len = buf.len();
+        Some(lex_tok!(
+            match chr {
+                '$' => Token::Register(buf),
+                ':' => Token::Word(buf),
+                _ => Token::Symbol(buf),
+            },
+            self,
+            start,
+            len + offset,
+            0
+        ))
     }
 
     fn consume_string(&mut self, start: usize) -> Option<LexTok<'a>> {
@@ -236,16 +282,15 @@ impl<'a> Lexer<'a> {
             buf.push(chr);
         }
 
-        self.line += lines;
-        if valid_str {
-            let len = buf.len();
-            let tok = lex_tok!(Token::String(buf), self, start, len + 2, lines);
-            self.line += lines;
-            Some(tok)
-        } else {
-            lex_err!("String not terminated."; self.input, start, buf.len(), self.line - lines => self.line);
-            None
+        if !valid_str {
+            lex_err!("String not terminated."; self.input, start, buf.len(), self.line => self.line + lines);
         }
+
+        self.line += lines;
+        let len = buf.len();
+        let tok = lex_tok!(Token::String(buf), self, start, len + 2, lines);
+        self.line += lines;
+        Some(tok)
     }
 
     fn consume_op(&mut self, chr: char, start: usize) -> Option<LexTok<'a>> {
@@ -254,12 +299,12 @@ impl<'a> Lexer<'a> {
             buf.push(chr);
             if OP_MAP.contains_key(&buf) {
                 self.chars.next();
-            } else {
-                buf.pop();
-                break;
+                continue;
             }
+            buf.pop();
+            break;
         }
         let (_, &op) = OP_MAP.get_entry(&buf)?;
-        Some(lex_tok!(Token::Operator(op), self, start, buf.len(), 0))
+        Some(lex_tok!(Token::Op(op), self, start, buf.len(), 0))
     }
 }

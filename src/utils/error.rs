@@ -14,6 +14,7 @@ macro_rules! lex_err {
 
 pub(crate) use lex_err;
 
-pub fn error(msg: &str, span: Span<'_>) {
-    println!("Error: '{msg}' @ {span}")
+pub fn error(msg: &str, span: Span<'_>) -> ! {
+    println!("Error: '{msg}' @ {span}");
+    std::process::exit(-1)
 }

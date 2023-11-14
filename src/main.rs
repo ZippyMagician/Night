@@ -1,10 +1,11 @@
-use crate::utils::token::Token;
-
 pub mod lexer;
+pub mod operator;
 pub mod utils;
 
+use lexer::{Lexer, Token};
+
 fn main() {
-    let mut lex = lexer::Lexer::new("5:x!.*$x:- 5");
+    let mut lex = Lexer::new("5:x!.*$x:- 5");
     let tokens = lex
         .tokenize()
         .into_iter()
