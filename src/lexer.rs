@@ -145,24 +145,10 @@ impl<'a> Lexer<'a> {
             ']' => Some(lex_tok!(Token::CloseBracket, self, start, 1, 0)),
             '{' => Some(lex_tok!(Token::OpenCurly, self, start, 1, 0)),
             '}' => Some(lex_tok!(Token::CloseCurly, self, start, 1, 0)),
+            _ if OP_MAP.contains_key(&chr.to_string()) => self.consume_op(chr, start),
             _ => {
-                if OP_MAP.contains_key(&chr.to_string()) {
-                    let mut buf = chr.to_string();
-                    while let Some(&(_, chr)) = self.chars.peek() {
-                        buf.push(chr);
-                        if OP_MAP.contains_key(&buf) {
-                            self.chars.next();
-                        } else {
-                            buf.pop();
-                            break;
-                        }
-                    }
-                    let (_, &op) = OP_MAP.get_entry(&buf).unwrap();
-                    Some(lex_tok!(Token::Operator(op), self, start, buf.len(), 0))
-                } else {
-                    lex_err!("Unrecognized token."; self.input, start, 1, self.line => self.line);
-                    None
-                }
+                lex_err!("Unrecognized token."; self.input, start, 1, self.line => self.line);
+                None
             }
         }
     }
@@ -260,5 +246,20 @@ impl<'a> Lexer<'a> {
             lex_err!("String not terminated."; self.input, start, buf.len(), self.line - lines => self.line);
             None
         }
+    }
+
+    fn consume_op(&mut self, chr: char, start: usize) -> Option<LexTok<'a>> {
+        let mut buf = chr.to_string();
+        while let Some(&(_, chr)) = self.chars.peek() {
+            buf.push(chr);
+            if OP_MAP.contains_key(&buf) {
+                self.chars.next();
+            } else {
+                buf.pop();
+                break;
+            }
+        }
+        let (_, &op) = OP_MAP.get_entry(&buf)?;
+        Some(lex_tok!(Token::Operator(op), self, start, buf.len(), 0))
     }
 }
