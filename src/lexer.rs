@@ -250,17 +250,12 @@ impl<'a> Lexer<'a> {
             lex_err!("Missing identifier for register."; self.input, start, 1, self.line => self.line);
         }
 
-        Some(lex_tok!(
-            match chr {
-                '$' => Token::Register(&self.input[start + 1..end]),
-                ':' => Token::Word(&self.input[start + 1..end]),
-                _ => Token::Symbol(&self.input[start..end]),
-            },
-            self,
-            start,
-            end - start,
-            0
-        ))
+        let t = match chr {
+            '$' => Token::Register(&self.input[start + 1..end]),
+            ':' => Token::Word(&self.input[start + 1..end]),
+            _ => Token::Symbol(&self.input[start..end]),
+        };
+        Some(lex_tok!(t, self, start, end - start, 0))
     }
 
     fn consume_string(&mut self, start: usize) -> Option<LexTok<'a>> {
