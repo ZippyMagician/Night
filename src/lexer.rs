@@ -123,13 +123,9 @@ impl<'a> Lexer<'a> {
 
     #[inline]
     fn is_peek_var(&mut self) -> bool {
-        self.chars.peek().map_or(false, |&(_, c)| match c {
-            'a'..='z' => true,
-            'A'..='Z' => true,
-            '_' => true,
-            '0'..='9' => true,
-            _ => false,
-        })
+        self.chars
+            .peek()
+            .map_or(false, |&(_, c)| c == '_' || c.is_ascii_alphanumeric())
     }
 
     // Main function, run to fully tokenize an input string
