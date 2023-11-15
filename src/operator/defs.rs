@@ -22,6 +22,7 @@ macro_rules! define {
     }
 }
 
+// Operator mappings for the tokens and their literal repr
 define! {
     "+" => (Operator::Add, None);
 

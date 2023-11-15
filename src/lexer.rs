@@ -5,46 +5,37 @@ use std::str::CharIndices;
 use crate::operator::{Operator, OP_MAP};
 use crate::utils::error::lex_err;
 
-// Enum that represents the various types of tokens the `Lexer` can consume and return
 #[derive(Clone, Debug)]
 pub enum Token<'a> {
-    // Literal single word (the same as a one word string)
-    // `:hello` equiv. `"hello"`
-    Word(&'a str),
-    // Literal number
     // `15`, `-3`
     Number(&'a str),
-    // Register value, aka temporary variable for usage
     // `$x`, `$_for_i`
     Register(&'a str),
-    // Literal string, self explanatory
+    // `"hello world"`, `:goodbye`, `"hi"`, `'a`
     String(&'a str),
-    // Literal symbol
     // `for`, `print`, `add`, etc.
     Symbol(&'a str),
-    // Operators can be considered pseudo-macros for pre-defined symbols
-    // e.g. `+` is the same as `add`.
+    // `+`, `!=`, `.`, etc
     Op(Operator),
-    // Literal newline. Has semantic meaning in some contexts, so this is necessary
+    // Has semantic meaning
     // e.g. in `x <- : . + \n 1 2 3 x`, x's definition should end with the newline
     Newline,
-    // Represents the `<-` symbol, for symbol assignment
+    // `<-`
     Define,
-    // Represents the `{` punctuation
+    // `{`
     OpenCurly,
-    // Represents the `}` punctuation
+    // `}`
     CloseCurly,
-    // Represents the `[` punctuation
+    // `[`
     OpenBracket,
-    // Represents the `]` punctuation
+    // `]`
     CloseBracket,
-    // Represents the `(` punctuation
+    // `(`
     OpenParen,
-    // Represents the `)` punctuation
+    // `)`
     CloseParen,
 }
 
-// Struct representing where in the input string some `Token` actually is represented
 #[derive(Clone, Debug)]
 pub struct Span<'a> {
     code: &'a str,
@@ -128,21 +119,28 @@ impl<'a> Display for Span<'a> {
     }
 }
 
-// Type alias for the type used by the `Lexer`
 pub type LexTok<'a> = (Token<'a>, Span<'a>);
 
-// Container struct that consumes a string to create a list of tokens
 pub struct Lexer<'a> {
     input: &'a str,
     chars: Peekable<CharIndices<'a>>,
     line: usize,
 }
 
-// Shorthand for writing out (tok, Span::span(/* ... */))
+// Shorthand for writing out Some((tok, Span::span(/* ... */)))
 macro_rules! lex_tok {
+    ($t:expr, $s_start:expr, $s_end:expr, $s:expr, $start:expr, $len:expr, $lines:expr) => {{
+        let span = crate::lexer::Span::span;
+        let buf = &$s.input[$s_start..$s_end];
+        Some((
+            $t(buf),
+            span($s.input, $start, $len, $s.line, $s.line + $lines),
+        ))
+    }};
+
     ($t:expr, $s:ident, $start:expr, $len:expr, $lines:expr) => {{
         let span = crate::lexer::Span::span;
-        ($t, span($s.input, $start, $len, $s.line, $s.line + $lines))
+        Some(($t, span($s.input, $start, $len, $s.line, $s.line + $lines)))
     }};
 }
 
@@ -187,7 +185,7 @@ impl<'a> Lexer<'a> {
 
         match chr {
             '0'..='9' => self.consume_number(start),
-            'a'..='z' | 'A'..='Z' => self.consume_word(chr, start),
+            'a'..='z' | 'A'..='Z' => self.consume_symbol(start),
             _ => lex_err!("Unrecognized token."; self.input, start, 1, self.line => self.line),
         }
     }
@@ -196,16 +194,17 @@ impl<'a> Lexer<'a> {
         match chr {
             '<' if matches!(self.chars.peek(), Some((_, '-'))) => {
                 self.chars.next();
-                Some(lex_tok!(Token::Define, self, start, 2, 0))
+                lex_tok!(Token::Define, self, start, 2, 0)
             }
+            '\'' => self.consume_char_lit(start),
             '-' if self.is_peek_digit() => self.consume_number(start),
-            ':' if self.is_peek_var() => self.consume_word(chr, start),
-            '$' => self.consume_word(chr, start),
+            ':' if self.is_peek_var() => self.consume_word(start),
+            '$' => self.consume_register(start),
             '"' => self.consume_string(start),
-            '[' => Some(lex_tok!(Token::OpenBracket, self, start, 1, 0)),
-            ']' => Some(lex_tok!(Token::CloseBracket, self, start, 1, 0)),
-            '{' => Some(lex_tok!(Token::OpenCurly, self, start, 1, 0)),
-            '}' => Some(lex_tok!(Token::CloseCurly, self, start, 1, 0)),
+            '[' => lex_tok!(Token::OpenBracket, self, start, 1, 0),
+            ']' => lex_tok!(Token::CloseBracket, self, start, 1, 0),
+            '{' => lex_tok!(Token::OpenCurly, self, start, 1, 0),
+            '}' => lex_tok!(Token::CloseCurly, self, start, 1, 0),
             _ if OP_MAP.contains_key(&self.input[start..start + 1]) => self.consume_op(start),
             _ => {
                 lex_err!("Unrecognized token."; self.input, start, 1, self.line => self.line)
@@ -217,10 +216,9 @@ impl<'a> Lexer<'a> {
         if chr == '\n' {
             let tok = lex_tok!(Token::Newline, self, start, 1, 0);
             self.line += 1;
-            return Some(tok);
+            return tok;
         }
 
-        // Skip and consume from the next character
         self.consume_token()
     }
 
@@ -230,32 +228,35 @@ impl<'a> Lexer<'a> {
             self.chars.next();
             end += 1;
         }
-        Some(lex_tok!(
-            Token::Number(&self.input[start..end]),
-            self,
-            start,
-            end - start,
-            0
-        ))
+        lex_tok!(Token::Number, start, end, self, start, end - start, 0)
     }
 
-    fn consume_word(&mut self, chr: char, start: usize) -> Option<LexTok<'a>> {
+    fn calculate_var_bounds(&mut self, start: usize) -> (usize, usize) {
         let mut end = start + 1;
         while self.is_peek_var() {
             self.chars.next();
             end += 1;
         }
 
+        (start, end)
+    }
+
+    fn consume_symbol(&mut self, start: usize) -> Option<LexTok<'a>> {
+        let (start, end) = self.calculate_var_bounds(start);
+        lex_tok!(Token::Symbol, start, end, self, start, end - start, 0)
+    }
+
+    fn consume_register(&mut self, start: usize) -> Option<LexTok<'a>> {
+        let (start, end) = self.calculate_var_bounds(start);
         if end - start == 1 {
             lex_err!("Missing identifier for register."; self.input, start, 1, self.line => self.line);
         }
+        lex_tok!(Token::Register, start + 1, end, self, start, end - start, 0)
+    }
 
-        let t = match chr {
-            '$' => Token::Register(&self.input[start + 1..end]),
-            ':' => Token::Word(&self.input[start + 1..end]),
-            _ => Token::Symbol(&self.input[start..end]),
-        };
-        Some(lex_tok!(t, self, start, end - start, 0))
+    fn consume_word(&mut self, start: usize) -> Option<LexTok<'a>> {
+        let (start, end) = self.calculate_var_bounds(start);
+        lex_tok!(Token::String, start + 1, end, self, start, end - start, 0)
     }
 
     fn consume_string(&mut self, start: usize) -> Option<LexTok<'a>> {
@@ -272,19 +273,15 @@ impl<'a> Lexer<'a> {
             end += 1;
         }
 
+        let span = end - start;
+
         if !valid_str {
-            lex_err!("String not terminated."; self.input, start, end - start, self.line => self.line + lines);
+            lex_err!("String not terminated."; self.input, start, span, self.line => self.line + lines);
         }
 
-        let tok = lex_tok!(
-            Token::String(&self.input[start + 1..end - 1]),
-            self,
-            start,
-            end - start,
-            lines
-        );
+        let tok = lex_tok!(Token::String, start + 1, end - 1, self, start, span, lines);
         self.line += lines;
-        Some(tok)
+        tok
     }
 
     fn consume_op(&mut self, start: usize) -> Option<LexTok<'a>> {
@@ -298,6 +295,14 @@ impl<'a> Lexer<'a> {
             break;
         }
         let (_, &op) = OP_MAP.get_entry(&self.input[start..end])?;
-        Some(lex_tok!(Token::Op(op), self, start, end - start, 0))
+        lex_tok!(Token::Op(op), self, start, end - start, 0)
+    }
+
+    fn consume_char_lit(&mut self, start: usize) -> Option<LexTok<'a>> {
+        if self.chars.next().is_none() {
+            lex_err!("Missing following char identifier."; self.input, start, 1, self.line => self.line);
+        }
+
+        lex_tok!(Token::String, start + 1, start + 2, self, start, 1, 0)
     }
 }

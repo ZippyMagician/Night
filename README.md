@@ -29,7 +29,7 @@ for(:_for_fn :_for_r) <- {
 | `join` | `,` | Joins top two values from stack into array |
 | `I` | | Intermediary op dependent on function |
 | `call` | `?` | Call function on top of stack |
-| `def` | `:=` | Assign value to variable symbol |
+| `define` | `:=` | Assign value to variable symbol |
 | `undef` | `:!=` | Unassign value from variable symbol, push value to stack |
 | `for` | `@` | See below |
 | `dip` | `_` | See below |
@@ -40,10 +40,11 @@ for(:_for_fn :_for_r) <- {
 :[a-zA-Z][_0-9a-zA-Z]* ⇒ Symbol (literal one-word string)
 \$[0-9a-zA-Z][_0-9a-zA-Z]* ⇒ Temp variable
 [a-zA-Z][_0-9a-zA-Z]* ⇒ Variable name
+'{anything} ⇒ Literal character
 
 # Some builtins more preprocessor-directives
 STACK N fn loop ⇒ STACK fn fn ... fn [N times]
-x <- y ⇒ y :x assign
+x <- y ⇒ y :x define
 # ⇒ comment
 
 # Other
