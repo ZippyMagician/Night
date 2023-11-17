@@ -7,32 +7,32 @@ use crate::utils::error::lex_err;
 
 #[derive(Clone, Debug)]
 pub enum Token<'a> {
-    // `15`, `-3`
+    /// `15`, `-3`
     Number(&'a str),
-    // `$x`, `$_for_i`
+    /// `$x`, `$_for_i`
     Register(&'a str),
-    // `"hello world"`, `:goodbye`, `"hi"`, `'a`
+    /// `"hello world"`, `:goodbye`, `"hi"`, `'a`
     String(&'a str),
-    // `for`, `print`, `add`, etc.
+    /// `for`, `print`, `add`, etc.
     Symbol(&'a str),
-    // `+`, `!=`, `.`, etc
+    /// `+`, `!=`, `.`, etc
     Op(Operator),
-    // Has semantic meaning
-    // e.g. in `x <- : . + \n 1 2 3 x`, x's definition should end with the newline
+    /// Has semantic meaning, unlike other whitespace
+    /// e.g. in `x <- : . + \n 1 2 3 x`, x's definition should end with the newline
     Newline,
-    // `<-`
+    /// `<-`
     Define,
-    // `{`
+    /// `{`
     OpenCurly,
-    // `}`
+    /// `}`
     CloseCurly,
-    // `[`
+    /// `[`
     OpenBracket,
-    // `]`
+    /// `]`
     CloseBracket,
-    // `(`
+    /// `(`
     OpenParen,
-    // `)`
+    /// `)`
     CloseParen,
 }
 
@@ -127,7 +127,7 @@ pub struct Lexer<'a> {
     line: usize,
 }
 
-// Shorthand for writing out Some((tok, Span::span(/* ... */)))
+/// Shorthand for writing out Some((tok, Span::span(/* ... */)))
 macro_rules! lex_tok {
     ($t:expr, $s_start:expr, $s_end:expr, $s:expr, $start:expr, $len:expr, $lines:expr) => {{
         let span = crate::lexer::Span::span;
@@ -165,7 +165,7 @@ impl<'a> Lexer<'a> {
             .map_or(false, |&(_, c)| c == '_' || c.is_ascii_alphanumeric())
     }
 
-    // Main function, run to fully tokenize an input string
+    /// Entry function for tokenization
     pub fn tokenize(&mut self) -> Vec<LexTok<'a>> {
         let mut tokens = Vec::new();
         while let Some(tok) = self.consume_token() {
