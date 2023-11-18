@@ -1,9 +1,9 @@
 use phf::phf_map;
 
+use super::Operator;
 use crate::scope::Scope;
 use crate::utils::error::Status;
 use crate::utils::function::InlineFunction;
-use super::Operator;
 
 macro_rules! define {
     ($($rep:expr => ($tok:pat, $lit:expr, $def:expr));*) => {
@@ -32,7 +32,7 @@ macro_rules! define {
         }
 
         impl InlineFunction for Operator {
-            fn call(&mut self, scope: Scope) -> Status {
+            fn call(&mut self, scope: Scope) -> Status<Scope> {
                 match self {
                     $(
                         $tok => ($def)(scope)

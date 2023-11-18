@@ -2,5 +2,8 @@
 target/
 Cargo.lock
 
+# Not final yet, unsure if I'm even going to end up using this
+crates/
+
 # VSCode generated files
 .vscode/

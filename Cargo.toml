@@ -16,5 +16,6 @@ path = "src/main.rs"
 
 [dependencies]
 phf = { version = "0.11.2", features = ["macros"] }
+# night_unwrap = { version = "1.0", path = "./crates/night_unwrap" }
 # clap = "2.33.3"
 # rand = "0.8.3

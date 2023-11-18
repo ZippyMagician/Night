@@ -1,5 +1,4 @@
 use crate::lexer::Span;
-use crate::scope::Scope;
 
 // Shorthand macro for calling crate::utils::error::error, used in `lexer.js`
 macro_rules! lex_err {
@@ -27,15 +26,15 @@ pub enum NightError {
 }
 
 #[derive(Clone, Debug)]
-pub struct Status {
-    pub scope: Scope,
+pub struct Status<T> {
+    pub data: T,
     pub info: NightError,
 }
 
-impl Status {
-    pub fn pass(scope: Scope) -> Self {
+impl<T> Status<T> {
+    pub fn pass(data: T) -> Self {
         Self {
-            scope,
+            data,
             info: NightError::Pass,
         }
     }

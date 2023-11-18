@@ -16,6 +16,7 @@ fn main() {
 
     let s = night::scope::Scope;
     let mut op_add = night::operator::Operator::Add;
-    
-    println!("{:?}", op_add.call(s))
+
+    let status = op_add.call(s);
+    println!("{:?}", status);
 }
