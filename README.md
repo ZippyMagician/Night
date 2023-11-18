@@ -8,7 +8,7 @@ x x * print
 
 mults(:a)  <- :a ! ; 11 1 range { $a I + } @
 mults2(:a) <- :a ! 9 { . $a + } loop
-7 mults # [7 14 21 28 35 42 49 56 63 70]
+7 mults
 
 dip(:_dip_inter) <- : :_dip_inter ! ; ? $_dip_inter
 for(:_for_fn :_for_r) <- {
@@ -45,7 +45,7 @@ for(:_for_fn :_for_r) <- {
 # Some builtins more preprocessor-directives
 STACK N fn loop ⇒ STACK fn fn ... fn [N times]
 x <- y ⇒ y :x define
-# ⇒ comment
+-- ⇒ comment
 
 # Other
 \n ⇒ Literal newline is a token, other whitespace ignored/unimportant

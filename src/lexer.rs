@@ -20,6 +20,8 @@ pub enum Token<'a> {
     /// Has semantic meaning, unlike other whitespace
     /// e.g. in `x <- : . + \n 1 2 3 x`, x's definition should end with the newline
     Newline,
+    /// EOF
+    EOF,
     /// `<-`
     Define,
     /// `{`
@@ -175,12 +177,22 @@ impl<'a> Lexer<'a> {
             .map_or(false, |&(_, c)| c == '_' || c.is_ascii_alphanumeric())
     }
 
+    #[inline]
+    fn is_peek_dash(&mut self) -> bool {
+        self.chars.peek().map_or(false, |&(_, c)| c == '-')
+    }
+
     /// Entry function for tokenization
     pub fn tokenize(&mut self) -> Vec<LexTok<'a>> {
         let mut tokens = Vec::new();
         while let Some(tok) = self.consume_token() {
             tokens.push(tok);
         }
+
+        tokens.push((
+            Token::EOF,
+            Span::span(self.input, self.input.len() - 1, 1, self.line, self.line),
+        ));
         tokens
     }
 
@@ -202,11 +214,12 @@ impl<'a> Lexer<'a> {
 
     fn maybe_op(&mut self, chr: char, start: usize) -> Option<LexTok<'a>> {
         match chr {
-            '<' if matches!(self.chars.peek(), Some((_, '-'))) => {
+            '<' if self.is_peek_dash() => {
                 self.chars.next();
                 lex_tok!(Token::Define, self, start, 2, 0)
             }
             '\'' => self.consume_char_lit(start),
+            '-' if self.is_peek_dash() => self.skip_comment(),
             '-' if self.is_peek_digit() => self.consume_number(start),
             ':' if self.is_peek_var() => self.consume_word(start),
             '$' => self.consume_register(start),
@@ -315,5 +328,17 @@ impl<'a> Lexer<'a> {
         }
 
         lex_tok!(Token::String, start + 1, start + 2, self, start, 1, 0)
+    }
+
+    fn skip_comment(&mut self) -> Option<LexTok<'a>> {
+        while let Some((i, tok)) = self.chars.next() {
+            if tok == '\n' {
+                let t = lex_tok!(Token::Newline, self, i, 1, 0);
+                self.line += 1;
+                return t;
+            }
+        }
+
+        None // End of file
     }
 }

@@ -5,7 +5,7 @@ use night::value::Value;
 fn main() {
     // Simulate execution of "TEST"
 
-    const TEST: &'static str = "4 7 + print 3 6 9 add print print";
+    const TEST: &'static str = "4 7 + print 3 6 9 add print print -- this is a comment\n0";
     let mut lex = night::lexer::Lexer::new(TEST);
     let tokens = lex
         .tokenize()
@@ -28,4 +28,5 @@ fn main() {
     night.exec(add.clone());
     night.exec(print.clone());
     night.exec(print.clone());
+    night.exec(Instr::Push(Value::from(0), 59));
 }
