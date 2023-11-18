@@ -18,12 +18,14 @@ pub enum Token<'a> {
     /// `+`, `!=`, `.`, etc
     Op(Operator),
     /// Has semantic meaning, unlike other whitespace
-    /// e.g. in `x <- : . + \n 1 2 3 x`, x's definition should end with the newline
+    /// e.g. in `-> x : . + \n 1 2 3 x`, x's definition should end with the newline
     Newline,
     /// EOF
     EOF,
-    /// `<-`
+    /// `->`
     Define,
+    /// `|`
+    Pipe,
     /// `{`
     OpenCurly,
     /// `}`
@@ -166,20 +168,8 @@ impl<'a> Lexer<'a> {
     }
 
     #[inline]
-    fn is_peek_digit(&mut self) -> bool {
-        self.chars.peek().map_or(false, |(_, c)| c.is_ascii_digit())
-    }
-
-    #[inline]
-    fn is_peek_var(&mut self) -> bool {
-        self.chars
-            .peek()
-            .map_or(false, |&(_, c)| c == '_' || c.is_ascii_alphanumeric())
-    }
-
-    #[inline]
-    fn is_peek_dash(&mut self) -> bool {
-        self.chars.peek().map_or(false, |&(_, c)| c == '-')
+    fn is_peek_match(&mut self, f: fn(&char) -> bool) -> bool {
+        self.chars.peek().map_or(false, |(_, c)| f(c))
     }
 
     /// Entry function for tokenization
@@ -213,21 +203,23 @@ impl<'a> Lexer<'a> {
     }
 
     fn maybe_op(&mut self, chr: char, start: usize) -> Option<LexTok<'a>> {
-        match chr {
-            '<' if self.is_peek_dash() => {
+        let peek = self.chars.peek().map(|&(_, c)| c);
+        match (chr, peek) {
+            ('\'', _) => self.consume_char_lit(start),
+            ('-', Some('-')) => self.skip_comment(),
+            ('-', Some('>')) => {
                 self.chars.next();
                 lex_tok!(Token::Define, self, start, 2, 0)
             }
-            '\'' => self.consume_char_lit(start),
-            '-' if self.is_peek_dash() => self.skip_comment(),
-            '-' if self.is_peek_digit() => self.consume_number(start),
-            ':' if self.is_peek_var() => self.consume_word(start),
-            '$' => self.consume_register(start),
-            '"' => self.consume_string(start),
-            '[' => lex_tok!(Token::OpenBracket, self, start, 1, 0),
-            ']' => lex_tok!(Token::CloseBracket, self, start, 1, 0),
-            '{' => lex_tok!(Token::OpenCurly, self, start, 1, 0),
-            '}' => lex_tok!(Token::CloseCurly, self, start, 1, 0),
+            ('-', Some(c)) if c.is_ascii_digit() => self.consume_number(start),
+            (':', Some(c @ ('-' | _))) if c.is_ascii_alphanumeric() => self.consume_word(start),
+            ('$', _) => self.consume_register(start),
+            ('"', _) => self.consume_string(start),
+            ('|', _) => lex_tok!(Token::Pipe, self, start, 1, 0),
+            ('[', _) => lex_tok!(Token::OpenBracket, self, start, 1, 0),
+            (']', _) => lex_tok!(Token::CloseBracket, self, start, 1, 0),
+            ('{', _) => lex_tok!(Token::OpenCurly, self, start, 1, 0),
+            ('}', _) => lex_tok!(Token::CloseCurly, self, start, 1, 0),
             _ if OP_MAP.contains_key(&self.input[start..start + 1]) => self.consume_op(start),
             _ => {
                 lex_err!("Unrecognized token."; self.input, start, 1, self.line => self.line)
@@ -247,7 +239,7 @@ impl<'a> Lexer<'a> {
 
     fn consume_number(&mut self, start: usize) -> Option<LexTok<'a>> {
         let mut end = start + 1;
-        while self.is_peek_digit() {
+        while self.is_peek_match(char::is_ascii_digit) {
             self.chars.next();
             end += 1;
         }
@@ -256,7 +248,7 @@ impl<'a> Lexer<'a> {
 
     fn calculate_var_bounds(&mut self, start: usize) -> (usize, usize) {
         let mut end = start + 1;
-        while self.is_peek_var() {
+        while self.is_peek_match(|&c| c == '-' || c.is_ascii_alphanumeric()) {
             self.chars.next();
             end += 1;
         }

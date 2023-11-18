@@ -1,17 +1,17 @@
 # Night
-Left-to-right stack-based programming language
+Left-to-right evaluated concatenative stack-based programming language
 
 ## Basic Syntax
 ```ruby
-x <- 4 7 +
+-> x| 4 7 +
 x x * print
 
-mults(:a)  <- :a ! ; 11 1 range { $a I + } @
-mults2(:a) <- :a ! 9 { . $a + } loop
+-> mults  (:a) :a ! ; 11 1 range { $a I + } for
+-> mults2 (:a) :a ! 9 { . $a + } loop
 7 mults
 
-dip(:_dip_inter) <- : :_dip_inter ! ; ? $_dip_inter
-for(:_for_fn :_for_r) <- {
+-> dip (:_dip_inter) : :_dip_inter ! ; ? $_dip_inter
+-> for (:_for_fn :_for_r) {
 	:_for_fn ! ; . len : :_for_r ! ;
 	{
 		$_for_r . head : 1 drop :_for_r ! ; :I def ;
@@ -29,10 +29,11 @@ for(:_for_fn :_for_r) <- {
 | `join` | `,` | Joins top two values from stack into array |
 | `I` | | Intermediary op dependent on function |
 | `call` | `?` | Call function on top of stack |
-| `define` | `:=` | Assign value to variable symbol |
-| `undef` | `:!=` | Unassign value from variable symbol, push value to stack |
-| `for` | `@` | See below |
+| `def` |  | Assign value to variable symbol |
+| `undef` |  | Unassign value from variable symbol, push value to stack |
+| `for` |  | See below |
 | `dip` | `_` | See below |
+| `const` | `\|` | Specifies a symbol definition as a constant value |
 `add`, `sub`, `mul`, `div`, `mod`, `eq`, `ne`, `gt`, `ge`, `lt`, `le`
 ## Parsing
 ```
@@ -44,12 +45,13 @@ for(:_for_fn :_for_r) <- {
 
 # Some builtins more preprocessor-directives
 STACK N fn loop ⇒ STACK fn fn ... fn [N times]
-x <- y ⇒ y :x define
+-> x  y ⇒ {y} :x def
+-> x| y ⇒   y :x def
 -- ⇒ comment
 
 # Other
 \n ⇒ Literal newline is a token, other whitespace ignored/unimportant
-x(word list) <- # def ⇒ Specify temp words to unassign after. Acts as guard.
+-> x (:word :list) { y }-- def ⇒ Specify temp words to unassign after. Acts as guard.
 ```
 ## Impl Order
 1. Basic expression parsing

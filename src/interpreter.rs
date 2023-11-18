@@ -18,7 +18,10 @@ pub enum Instr {
     Guard(Vec<String>),
     Drop(Vec<String>),
     StartArray(usize),
-    EndArray { span: usize, end: usize },
+    EndArray(usize),
+    StartParen(usize),
+    EndParen(usize),
+    Define(bool, usize),
 }
 
 pub struct Night<'a> {
