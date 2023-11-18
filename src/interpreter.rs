@@ -1,12 +1,13 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use crate::lexer::{Span, LexTok, Token};
-use crate::builtin::{Builtin, BUILTIN_MAP, Operator};
+use crate::builtin::{Builtin, Operator, BUILTIN_MAP};
+use crate::lexer::{LexTok, Span, Token};
 use crate::scope::{Scope, ScopeInternal};
 use crate::utils::function::InlineFunction;
 use crate::value::Value;
 
+#[derive(Clone, Debug)]
 pub enum Instr {
     Push(Value, usize),
     // PushFunc(...),
@@ -44,10 +45,12 @@ impl<'a> Night<'a> {
                 self._spans.push(tok.1);
                 if let Some(&b) = BUILTIN_MAP.get(s) {
                     Instr::Internal(b, self._spans.len() - 1)
+                } else if let Some(o) = Operator::from_name(s) {
+                    Instr::Op(o, self._spans.len() - 1)
                 } else {
                     Instr::PushSym(s.to_string(), false, self._spans.len() - 1)
                 }
-            },
+            }
             _ => unreachable!(),
         }
     }

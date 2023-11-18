@@ -1,28 +1,31 @@
 use night::interpreter::{Instr, Night};
-use night::lexer::{Token, Span};
+use night::lexer::{Span, Token};
 use night::value::Value;
 
 fn main() {
-    let program = r#"
-    5 :x ! . * : $x : -
-    y <- 4 9 +
-    "hello" 'c '@
-    "#;
-    let mut lex = night::lexer::Lexer::new(program);
+    // Simulate execution of "TEST"
+
+    const TEST: &'static str = "4 7 + print 3 6 9 add print print";
+    let mut lex = night::lexer::Lexer::new(TEST);
     let tokens = lex
         .tokenize()
         .into_iter()
         .map(|(t, _)| t)
         .collect::<Vec<_>>();
     println!("{:?}", tokens);
+    let mut night = Night::init(TEST, vec![]);
 
-    let program = "4 7 +";
-    let mut night = Night::init(program, vec![]);
+    let add = night.maybe_builtin((Token::Symbol("add"), Span::empty()));
+    let print = night.maybe_builtin((Token::Symbol("print"), Span::empty()));
 
-    // Simulate execution
     night.exec(Instr::Push(Value::from(4), 0));
     night.exec(Instr::Push(Value::from(7), 2));
     night.exec(Instr::Op(night::builtin::Operator::Add, 4));
-    let print = night.maybe_builtin((Token::Symbol("print"), Span::empty()));
-    night.exec(print);
+    night.exec(print.clone());
+    night.exec(Instr::Push(Value::from(3), 12));
+    night.exec(Instr::Push(Value::from(6), 14));
+    night.exec(Instr::Push(Value::from(9), 16));
+    night.exec(add.clone());
+    night.exec(print.clone());
+    night.exec(print.clone());
 }

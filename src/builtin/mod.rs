@@ -1,7 +1,7 @@
 mod defs;
 
-pub use defs::OP_MAP;
 pub use defs::BUILTIN_MAP;
+pub use defs::OP_MAP;
 
 #[derive(Clone, Copy, Debug)]
 #[repr(C)]

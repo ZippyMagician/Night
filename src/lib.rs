@@ -1,6 +1,6 @@
+pub mod builtin;
 pub mod interpreter;
 pub mod lexer;
-pub mod builtin;
 pub mod scope;
 pub mod utils;
 pub mod value;

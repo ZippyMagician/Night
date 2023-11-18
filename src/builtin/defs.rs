@@ -31,6 +31,15 @@ macro_rules! define_ops {
                     ),*
                 }
             }
+
+            pub fn from_name(n: impl AsRef<str>) -> Option<Self> {
+                $(
+                    if $lit == n.as_ref() {
+                        return OP_MAP.get($rep).copied();
+                    }
+                )*
+                None
+            }
         }
 
         impl InlineFunction for Operator {

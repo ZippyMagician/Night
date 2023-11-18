@@ -1,5 +1,5 @@
-use std::ops::Add;
 use std::fmt::{self, Display};
+use std::ops::Add;
 
 use crate::utils::error::{NightError, Status};
 
