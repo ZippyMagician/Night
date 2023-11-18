@@ -1,3 +1,5 @@
+use night::utils::function::InlineFunction;
+
 fn main() {
     let program = r#"
     5 :x ! . * : $x : -
@@ -11,4 +13,9 @@ fn main() {
         .map(|(t, _)| t)
         .collect::<Vec<_>>();
     println!("{:?}", tokens);
+
+    let s = night::scope::Scope;
+    let mut op_add = night::operator::Operator::Add;
+    
+    println!("{:?}", op_add.call(s))
 }

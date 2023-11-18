@@ -57,7 +57,7 @@ impl<'a> Span<'a> {
     }
 
     fn fmt_line(&self, line: usize) -> String {
-        format!("{line:>7}| {}\n", self.code.split('\n').nth(line).unwrap())
+        format!("{line:>7}| {}\n", self.code.lines().nth(line).unwrap())
     }
 
     fn fmt_arrow(&self, start: usize, len: usize) -> String {
@@ -76,7 +76,7 @@ impl<'a> Span<'a> {
         let left = self.start
             - self
                 .code
-                .split('\n')
+                .lines()
                 .take(self.line_start)
                 .map(str::len)
                 .sum::<usize>()
@@ -87,7 +87,7 @@ impl<'a> Span<'a> {
         } else {
             let offset: usize = self
                 .code
-                .split('\n')
+                .lines()
                 .skip(self.line_start)
                 .take(self.line_end - self.line_start)
                 .map(str::len)
@@ -241,6 +241,7 @@ impl<'a> Lexer<'a> {
         (start, end)
     }
 
+    // The pass to convert matching symbols to built ins and operators occurs prior to execution
     fn consume_symbol(&mut self, start: usize) -> Option<LexTok<'a>> {
         let (start, end) = self.calculate_var_bounds(start);
         lex_tok!(Token::Symbol, start, end, self, start, end - start, 0)

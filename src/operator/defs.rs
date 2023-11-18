@@ -1,20 +1,41 @@
 use phf::phf_map;
 
+use crate::scope::Scope;
+use crate::utils::error::Status;
+use crate::utils::function::InlineFunction;
 use super::Operator;
 
 macro_rules! define {
-    ($($rep:expr => ($lit:pat, $guard:expr));*) => {
-        pub static OP_MAP: phf::Map<&'static str, crate::operator::Operator> = phf_map! {
+    ($($rep:expr => ($tok:pat, $lit:expr, $def:expr));*) => {
+        pub static OP_MAP: phf::Map<&'static str, Operator> = phf_map! {
             $(
-               $rep => $lit
+               $rep => $tok
             ),*
         };
 
-        impl crate::operator::Operator {
+        impl Operator {
             pub fn get_glyph(&self) -> &'static str {
-                match *self {
+                match self {
                     $(
-                        $lit => $rep
+                        $tok => $rep
+                    ),*
+                }
+            }
+
+            pub fn name(&self) -> &'static str {
+                match self {
+                    $(
+                        $tok => $lit
+                    ),*
+                }
+            }
+        }
+
+        impl InlineFunction for Operator {
+            fn call(&mut self, scope: Scope) -> Status {
+                match self {
+                    $(
+                        $tok => ($def)(scope)
                     ),*
                 }
             }
@@ -24,33 +45,33 @@ macro_rules! define {
 
 // Operator mappings for the tokens and their literal repr
 define! {
-    "+" => (Operator::Add, None);
+    "+" => (Operator::Add, "add", |s: Scope| Status::pass(s));
 
-    "-" => (Operator::Sub, None);
+    "-" => (Operator::Sub, "sub", |s: Scope| Status::pass(s));
 
-    "/" => (Operator::Div, None);
+    "/" => (Operator::Div, "div", |s: Scope| Status::pass(s));
 
-    "*" => (Operator::Mul, None);
+    "*" => (Operator::Mul, "mul", |s: Scope| Status::pass(s));
 
-    "=" => (Operator::Eq, None);
+    "=" => (Operator::Eq, "eq", |s: Scope| Status::pass(s));
 
-    "!=" => (Operator::Neq, None);
+    "!=" => (Operator::Neq, "neq", |s: Scope| Status::pass(s));
 
-    ">" => (Operator::Gt, None);
+    ">" => (Operator::Gt, "gt", |s: Scope| Status::pass(s));
 
-    "<" => (Operator::Lt, None);
+    "<" => (Operator::Lt, "lt", |s: Scope| Status::pass(s));
 
-    ">=" => (Operator::Gte, None);
+    ">=" => (Operator::Gte, "gte", |s: Scope| Status::pass(s));
 
-    "<=" => (Operator::Lte, None);
+    "<=" => (Operator::Lte, "lte", |s: Scope| Status::pass(s));
 
-    "!" => (Operator::Assign, None);
+    "!" => (Operator::Assign, "tmpa", |s: Scope| Status::pass(s));
 
-    ";" => (Operator::Pop, None);
+    ";" => (Operator::Pop, "pop", |s: Scope| Status::pass(s));
 
-    ":" => (Operator::Swap, None);
+    ":" => (Operator::Swap, "swap", |s: Scope| Status::pass(s));
 
-    "." => (Operator::Dup, None);
+    "." => (Operator::Dup, "dup", |s: Scope| Status::pass(s));
 
-    "?" => (Operator::Call, None)
+    "?" => (Operator::Call, "call", |s: Scope| Status::pass(s))
 }

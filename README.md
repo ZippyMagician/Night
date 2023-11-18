@@ -85,7 +85,7 @@ enum Instr {
 // Like this
 trait InlineFunction;
 impl InlineFunction for Dup {
-	fn call(&self, scope: Scope) -> Result<Scope, Box<dyn ToString>> {
+	fn call(&self, scope: Scope) -> Result<Scope, NightError> {
 		let val = scope.pop_stack()?;
 		scope.push_stack(val.clone());
 		scope.push_stack(val);
