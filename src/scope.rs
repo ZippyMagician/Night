@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::fmt::{self, Display};
 use std::rc::Rc;
 
 use crate::utils::error::{NightError, Status};
@@ -46,6 +47,19 @@ impl ScopeInternal {
 
     pub fn push_val(&mut self, val: Value) {
         self.stack.push(ScopeEnv::Value(val));
+    }
+}
+
+impl Display for ScopeInternal {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        for val in &self.stack {
+            match val {
+                ScopeEnv::Value(v) => writeln!(f, "{v}")?,
+                ScopeEnv::Function(_) => writeln!(f, "<Function>")?,
+            }
+        }
+
+        Ok(())
     }
 }
 

@@ -198,7 +198,9 @@ impl<'a> Lexer<'a> {
         match chr {
             '0'..='9' => self.consume_number(start),
             'a'..='z' | 'A'..='Z' => self.consume_symbol(start),
-            _ => lex_err!("Unrecognized token."; self.input, start, 1, self.line => self.line),
+            _ => {
+                lex_err!("LexError: Unrecognized token."; self.input, start, 1, self.line => self.line)
+            }
         }
     }
 
@@ -222,7 +224,7 @@ impl<'a> Lexer<'a> {
             ('}', _) => lex_tok!(Token::CloseCurly, self, start, 1, 0),
             _ if OP_MAP.contains_key(&self.input[start..start + 1]) => self.consume_op(start),
             _ => {
-                lex_err!("Unrecognized token."; self.input, start, 1, self.line => self.line)
+                lex_err!("LexError: Unrecognized token."; self.input, start, 1, self.line => self.line)
             }
         }
     }
@@ -265,7 +267,7 @@ impl<'a> Lexer<'a> {
     fn consume_register(&mut self, start: usize) -> Option<LexTok<'a>> {
         let (start, end) = self.calculate_var_bounds(start);
         if end - start == 1 {
-            lex_err!("Missing identifier for register."; self.input, start, 1, self.line => self.line);
+            lex_err!("LexError: Missing identifier for register."; self.input, start, 1, self.line => self.line);
         }
         lex_tok!(Token::Register, start + 1, end, self, start, end - start, 0)
     }
@@ -292,7 +294,7 @@ impl<'a> Lexer<'a> {
         let span = end - start;
 
         if !valid_str {
-            lex_err!("String not terminated."; self.input, start, span, self.line => self.line + lines);
+            lex_err!("LexError: String not terminated."; self.input, start, span, self.line => self.line + lines);
         }
 
         let tok = lex_tok!(Token::String, start + 1, end - 1, self, start, span, lines);
@@ -316,7 +318,7 @@ impl<'a> Lexer<'a> {
 
     fn consume_char_lit(&mut self, start: usize) -> Option<LexTok<'a>> {
         if self.chars.next().is_none() {
-            lex_err!("Missing following char identifier."; self.input, start, 1, self.line => self.line);
+            lex_err!("LexError: Missing following char identifier."; self.input, start, 1, self.line => self.line);
         }
 
         lex_tok!(Token::String, start + 1, start + 2, self, start, 1, 0)
