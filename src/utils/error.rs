@@ -17,25 +17,14 @@ pub fn error(msg: &str, span: Span<'_>) -> ! {
     std::process::exit(-1)
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub enum NightError {
     Pass,
-    MissingArg,
-    InvalidParam,
-    // TODO
+    NothingToPop,
+    UnsupportedType(String),
+    SymbolRedefinition(String),
+    Unimplemented(String),
+    // TODO: whatever else I need
 }
 
-#[derive(Clone, Debug)]
-pub struct Status<T> {
-    pub data: T,
-    pub info: NightError,
-}
-
-impl<T> Status<T> {
-    pub fn pass(data: T) -> Self {
-        Self {
-            data,
-            info: NightError::Pass,
-        }
-    }
-}
+pub type Status<T = ()> = Result<T, NightError>;

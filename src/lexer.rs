@@ -2,7 +2,7 @@ use std::fmt::{self, Display};
 use std::iter::Peekable;
 use std::str::CharIndices;
 
-use crate::operator::{Operator, OP_MAP};
+use crate::builtin::{Operator, OP_MAP};
 use crate::utils::error::lex_err;
 
 #[derive(Clone, Debug)]
@@ -46,6 +46,16 @@ pub struct Span<'a> {
 }
 
 impl<'a> Span<'a> {
+    pub fn empty() -> Self {
+        Self {
+            code: "",
+            start: 0,
+            len: 0,
+            line_start: 0,
+            line_end: 0,
+        }
+    }
+
     fn span(code: &'a str, start: usize, len: usize, line_start: usize, line_end: usize) -> Self {
         Self {
             code,

@@ -1,4 +1,6 @@
-use night::utils::function::InlineFunction;
+use night::interpreter::{Instr, Night};
+use night::lexer::{Token, Span};
+use night::value::Value;
 
 fn main() {
     let program = r#"
@@ -14,9 +16,13 @@ fn main() {
         .collect::<Vec<_>>();
     println!("{:?}", tokens);
 
-    let s = night::scope::Scope;
-    let mut op_add = night::operator::Operator::Add;
+    let program = "4 7 +";
+    let mut night = Night::init(program, vec![]);
 
-    let status = op_add.call(s);
-    println!("{:?}", status);
+    // Simulate execution
+    night.exec(Instr::Push(Value::from(4), 0));
+    night.exec(Instr::Push(Value::from(7), 2));
+    night.exec(Instr::Op(night::builtin::Operator::Add, 4));
+    let print = night.maybe_builtin((Token::Symbol("print"), Span::empty()));
+    night.exec(print);
 }

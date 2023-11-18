@@ -1,6 +1,7 @@
 mod defs;
 
 pub use defs::OP_MAP;
+pub use defs::BUILTIN_MAP;
 
 #[derive(Clone, Copy, Debug)]
 #[repr(C)]
@@ -22,4 +23,9 @@ pub enum Operator {
     Call,
 }
 
-// TODO: impl Operator to write the functions for each
+#[derive(Clone, Copy, Debug)]
+#[repr(C)]
+pub enum Builtin {
+    Print,
+    // TODO: more
+}
