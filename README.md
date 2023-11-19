@@ -1,5 +1,7 @@
 # Night
-Left-to-right evaluated concatenative stack-based programming language
+**(WIP)** Left-to-right interpreted concatenative stack-based programming language.
+Kinda just writing this for fun right now. Not planning on it being intended for golfing,
+but considering I mostly wrote languages for this it may have some inspired elements.
 
 ## Basic Syntax
 ```ruby
