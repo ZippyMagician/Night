@@ -5,7 +5,7 @@ use std::str::CharIndices;
 use crate::builtin::{Operator, OP_MAP};
 use crate::utils::error::lex_err;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Token<'a> {
     /// `15`, `-3`
     Number(&'a str),

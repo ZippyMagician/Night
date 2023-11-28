@@ -27,11 +27,25 @@ pub enum NightError {
     Fail,
     NothingToPop,
     NaN,
+    Syntax(String),
     UnsupportedType(String),
+    UndefinedSymbol(String),
     SymbolRedefinition(String),
     Unimplemented(String),
     // TODO: whatever else I need
 }
+
+macro_rules! night_err {
+    ($type:ident, $msg:expr) => {
+        Err(crate::utils::error::NightError::$type($msg.to_string()))
+    };
+
+    ($type:ident) => {
+        Err(crate::utils::error::NightError::$type)
+    };
+}
+
+pub(crate) use night_err;
 
 pub type Status<T = ()> = Result<T, NightError>;
 
@@ -41,12 +55,14 @@ impl Display for NightError {
 
         match self {
             Pass => unreachable!(),
-            Fail => write!(f, "Error."),
+            Fail => write!(f, "Error: Program failed."),
             NothingToPop => write!(f, "StackError: Missing value to pop."),
             NaN => write!(f, "TypeError: Not a valid number"),
+            Syntax(s) => write!(f, "SyntaxError: {s}"),
             UnsupportedType(s) => write!(f, "TypeError: {s}"),
+            UndefinedSymbol(s) => write!(f, "UndefinedError: '{s}' is undefined."),
             SymbolRedefinition(s) => write!(f, "StackError: Attempted to redefine symbol '{s}'."),
-            Unimplemented(s) => write!(f, "InternalError: '{s}' is unimplemented."),
+            Unimplemented(s) => write!(f, "ImplementationError: '{s}' is unimplemented."),
         }
     }
 }

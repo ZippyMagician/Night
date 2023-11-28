@@ -1,7 +1,7 @@
 use std::fmt::{self, Display};
 use std::ops::{Add, Div, Mul, Rem, Sub};
 
-use crate::utils::error::{NightError, Status};
+use crate::utils::error::{night_err, Status};
 
 #[derive(Clone, Debug)]
 enum Type {
@@ -16,6 +16,7 @@ pub struct Value {
 }
 
 impl Value {
+    #[inline]
     pub fn is_num(&self) -> bool {
         match self.t {
             Type::Num(_) => true,
@@ -23,10 +24,25 @@ impl Value {
         }
     }
 
+    pub fn as_num(self) -> Status<i32> {
+        match self.t {
+            Type::Num(n) => Ok(n),
+            _ => night_err!(NaN),
+        }
+    }
+
+    #[inline]
     pub fn is_str(&self) -> bool {
         match self.t {
             Type::Str(_) => true,
             _ => false,
+        }
+    }
+
+    pub fn as_str(self) -> Status<String> {
+        match self.t {
+            Type::Str(s) => Ok(s),
+            _ => night_err!(UnsupportedType, "Expected string."),
         }
     }
 }
@@ -45,9 +61,7 @@ macro_rules! impl_arith_ops {
                         }
                     }
 
-                    Err(NightError::UnsupportedType(
-                        concat!("Cannot call '", $lit, "' on non-numbers.").to_string(),
-                    ))
+                    night_err!(UnsupportedType, concat!("Cannot call '", $lit, "' on non-numbers."))
                 }
             }
         )*
@@ -83,6 +97,14 @@ impl From<String> for Value {
     fn from(value: String) -> Self {
         Self {
             t: Type::Str(value),
+        }
+    }
+}
+
+impl From<&str> for Value {
+    fn from(value: &str) -> Self {
+        Self {
+            t: Type::Str(value.to_string()),
         }
     }
 }

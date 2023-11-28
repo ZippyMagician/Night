@@ -2,7 +2,7 @@ use phf::phf_map;
 
 use super::{Builtin, Operator};
 use crate::scope::Scope;
-use crate::utils::error::Status;
+use crate::utils::error::{night_err, Status};
 use crate::utils::function::{self, InlineFunction};
 use crate::value::Value;
 
@@ -31,7 +31,7 @@ macro_rules! _define_internal {
 }
 
 macro_rules! define_ops {
-    ($($rep:expr => ($tok:pat, $lit:expr, $a:tt($b:tt): $def:expr));*) => {
+    ($($rep:expr => ($tok:pat, $lit:expr, $a:tt($b:tt): $def:expr));*;) => {
         pub static OP_MAP: phf::Map<&'static str, Operator> = phf_map! {
             $(
                $rep => $tok
@@ -69,7 +69,7 @@ macro_rules! define_ops {
             fn call(&self, scope: Scope) -> Status {
                 match self {
                     $(
-                        $tok => _define_internal!(scope, $a($b), $def)
+                        $tok => _define_internal!(scope, $a($b), $def).into()
                     ),*
                 }
             }
@@ -78,7 +78,7 @@ macro_rules! define_ops {
 }
 
 macro_rules! define_builtins {
-    ($($rep:expr => ($tok:pat, $a:tt($b:tt): $def:expr)),*) => {
+    ($($rep:expr => ($tok:pat, $a:tt($b:tt): $def:expr));*;) => {
         pub static BUILTIN_MAP: phf::Map<&'static str, Builtin> = phf_map! {
             $(
                 $rep => $tok
@@ -99,7 +99,7 @@ macro_rules! define_builtins {
             fn call(&self, scope: Scope) -> Status {
                 match self {
                     $(
-                        $tok => _define_internal!(scope, $a($b), $def)
+                        $tok => _define_internal!(scope, $a($b), $def).into()
                     ),*
                 }
             }
@@ -139,14 +139,37 @@ define_ops! {
 
     "." => (Operator::Dup, "dup", 2(1): op_dup);
 
-    "?" => (Operator::Call, "call", 0(0): |_: Scope| Ok(()))
+    "?" => (Operator::Call, "call", 0(0): |_: Scope| {
+        night_err!(Unimplemented, "An internal error occurred, this should not have been called")
+    });
 }
 
 define_builtins! {
     "print" => (Builtin::Print, 0(1): |v: Value| {
         println!("{v}");
         Ok(())
-    })
+    });
+
+    "inc" => (Builtin::Inc, 1(1): |v: Value| {
+        let n = v.as_num()?;
+        Ok(Value::from(n + 1))
+    });
+
+    "dec" => (Builtin::Dec, 1(1): |v: Value| {
+        let n = v.as_num()?;
+        Ok(Value::from(n - 1))
+    });
+
+    "def" => (Builtin::Def, 0(2): |scope: Scope| {
+        let mut s = scope.borrow_mut();
+        let name = s.pop_value()?.as_str()?;
+        let value = s.pop()?;
+        s.def(name, value)
+    });
+
+    "undef" => (Builtin::Undef, 0(1): |_: Value| {
+        night_err!(Unimplemented, "Symbol undefinition")
+    });
 }
 
 fn op_add(left: Value, right: Value) -> Status<Value> {

@@ -3,7 +3,7 @@ mod defs;
 pub use defs::BUILTIN_MAP;
 pub use defs::OP_MAP;
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(C)]
 pub enum Operator {
     Add,
@@ -28,5 +28,9 @@ pub enum Operator {
 #[repr(C)]
 pub enum Builtin {
     Print,
+    Inc,
+    Dec,
+    Def,
+    Undef,
     // TODO: more
 }
