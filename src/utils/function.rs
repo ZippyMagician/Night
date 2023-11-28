@@ -13,12 +13,14 @@ impl InlineFunction for fn(Scope) -> Status {
     }
 }
 
+#[inline]
 pub fn arity1_0(def: fn(Value) -> Status, scope: Scope) -> Status {
     let mut s = scope.borrow_mut();
     let arg = s.pop_value()?;
     def(arg)
 }
 
+#[inline]
 pub fn arity1_1(def: fn(Value) -> Status<Value>, scope: Scope) -> Status {
     let mut s = scope.borrow_mut();
     let arg = s.pop_value()?;
@@ -26,6 +28,7 @@ pub fn arity1_1(def: fn(Value) -> Status<Value>, scope: Scope) -> Status {
     Ok(())
 }
 
+#[inline]
 pub fn arity2_1(def: fn(Value, Value) -> Status<Value>, scope: Scope) -> Status {
     let mut s = scope.borrow_mut();
     let right = s.pop_value()?;

@@ -28,15 +28,19 @@ impl ScopeInternal {
         }
     }
 
-    pub fn pop(&mut self) -> Status {
-        Err(NightError::Unimplemented(
-            "ScopeInternal::pop unimplemented".to_string(),
-        ))
+    pub fn pop(&mut self) -> Status<ScopeEnv> {
+        match self.stack.pop() {
+            Some(v) => Ok(v),
+            _ => Err(NightError::NothingToPop),
+        }
     }
 
     pub fn pop_value(&mut self) -> Status<Value> {
         match self.stack.pop() {
             Some(ScopeEnv::Value(v)) => Ok(v),
+            Some(_) => Err(NightError::UnsupportedType(
+                "Expected literal value, found function.".to_string(),
+            )),
             _ => Err(NightError::NothingToPop),
         }
     }

@@ -133,11 +133,11 @@ define_ops! {
 
     "!" => (Operator::Assign, "tmpa", 0(0): |_: Scope| Ok(()));
 
-    ";" => (Operator::Pop, "pop", 0(0): |_: Scope| Ok(()));
+    ";" => (Operator::Pop, "pop", 0(1): op_pop);
 
-    ":" => (Operator::Swap, "swap", 0(0): |_: Scope| Ok(()));
+    ":" => (Operator::Swap, "swap", 2(2): op_swap);
 
-    "." => (Operator::Dup, "dup", 0(0): |_: Scope| Ok(()));
+    "." => (Operator::Dup, "dup", 2(1): op_dup);
 
     "?" => (Operator::Call, "call", 0(0): |_: Scope| Ok(()))
 }
@@ -167,4 +167,26 @@ fn op_div(left: Value, right: Value) -> Status<Value> {
 
 fn op_mod(left: Value, right: Value) -> Status<Value> {
     left % right
+}
+
+fn op_pop(arg: Value) -> Status {
+    drop(arg);
+    Ok(())
+}
+
+fn op_swap(scope: Scope) -> Status {
+    let mut s = scope.borrow_mut();
+    let right = s.pop()?;
+    let left = s.pop()?;
+    s.push(right);
+    s.push(left);
+    Ok(())
+}
+
+fn op_dup(scope: Scope) -> Status {
+    let mut s = scope.borrow_mut();
+    let val = s.pop()?;
+    s.push(val.clone());
+    s.push(val);
+    Ok(())
 }

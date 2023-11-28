@@ -1,5 +1,5 @@
 use std::fmt::{self, Display};
-use std::ops::{Add, Sub, Mul, Div, Rem};
+use std::ops::{Add, Div, Mul, Rem, Sub};
 
 use crate::utils::error::{NightError, Status};
 
@@ -54,15 +54,13 @@ macro_rules! impl_arith_ops {
     }
 }
 
-impl_arith_ops!{
+impl_arith_ops! {
     Add, add, "add", [l, r] {l + r};
     Sub, sub, "sub", [l, r] {l - r};
     Mul, mul, "mul", [l, r] {l * r};
     Div, div, "div", [l, r] {l / r};
     Rem, rem, "mod", [l, r] {l % r};
 }
-
-
 
 impl Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

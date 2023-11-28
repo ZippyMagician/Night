@@ -48,7 +48,7 @@ macro_rules! push_instr {
 }
 
 impl<'a> Night<'a> {
-    pub fn init(code: &str, tokens: Vec<LexTok<'a>>) -> Self {
+    pub fn new(code: &str, tokens: Vec<LexTok<'a>>) -> Self {
         Self {
             _code: code.into(),
             tokens: tokens.into_iter(),
@@ -62,7 +62,7 @@ impl<'a> Night<'a> {
         self.scope.clone()
     }
 
-    pub fn build_instrs(&mut self) {
+    pub fn init(&mut self) {
         while let Some((tok, span)) = self.tokens.next() {
             self.spans.push(span.clone());
             if let Err(e) = self.build_instr(tok) {
@@ -99,14 +99,14 @@ impl<'a> Night<'a> {
         }
     }
 
-    pub fn exec_all(&mut self) {
+    pub fn exec(&mut self) {
         while let Some(instr) = self.instrs.pop_back() {
-            self.exec(instr);
+            self.exec_instr(instr);
         }
     }
 
     #[inline]
-    pub fn exec(&mut self, instr: Instr) {
+    pub fn exec_instr(&mut self, instr: Instr) {
         use Instr::*;
 
         match instr {
