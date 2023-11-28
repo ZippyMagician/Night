@@ -1,14 +1,37 @@
-use std::ops::Add;
-
 use phf::phf_map;
 
 use super::{Builtin, Operator};
 use crate::scope::Scope;
 use crate::utils::error::Status;
-use crate::utils::function::InlineFunction;
+use crate::utils::function::{self, InlineFunction};
+use crate::value::Value;
+
+// TODO: fix this + create required `arity` functions
+// not sure if this will be used for `define_builtins` as well. It probably will in
+// some regard, although I don't think anything other than 0 or 1 output will be
+// supported (since it doesn't fit well with how I handle error returns with `Status`.
+macro_rules! _define_internal {
+    // 1 arg 0 outputs
+    ($scope:expr, 0(1), $def:expr) => {
+        function::arity1_0($def, $scope)
+    };
+    // 1 arg 1 output
+    ($scope:expr, 1(1), $def:expr) => {
+        function::arity1_1($def, $scope)
+    };
+    // 2 args 1 output
+    ($scope:expr, 1(2), $def:expr) => {
+        function::arity2_1($def, $scope)
+    };
+    // all other cases
+    // TODO: maybe other common patterns supported
+    ($scope:expr, $a:tt($b:tt), $def:expr) => {
+        ($def)($scope)
+    };
+}
 
 macro_rules! define_ops {
-    ($($rep:expr => ($tok:pat, $lit:expr, $def:expr));*) => {
+    ($($rep:expr => ($tok:pat, $lit:expr, $a:tt($b:tt): $def:expr));*) => {
         pub static OP_MAP: phf::Map<&'static str, Operator> = phf_map! {
             $(
                $rep => $tok
@@ -46,7 +69,7 @@ macro_rules! define_ops {
             fn call(&self, scope: Scope) -> Status {
                 match self {
                     $(
-                        $tok => ($def)(scope)
+                        $tok => _define_internal!(scope, $a($b), $def)
                     ),*
                 }
             }
@@ -55,7 +78,7 @@ macro_rules! define_ops {
 }
 
 macro_rules! define_builtins {
-    ($($rep:expr => ($tok:pat, $def:expr)),*) => {
+    ($($rep:expr => ($tok:pat, $a:tt($b:tt): $def:expr)),*) => {
         pub static BUILTIN_MAP: phf::Map<&'static str, Builtin> = phf_map! {
             $(
                 $rep => $tok
@@ -76,7 +99,7 @@ macro_rules! define_builtins {
             fn call(&self, scope: Scope) -> Status {
                 match self {
                     $(
-                        $tok => ($def)(scope)
+                        $tok => _define_internal!(scope, $a($b), $def)
                     ),*
                 }
             }
@@ -86,50 +109,62 @@ macro_rules! define_builtins {
 
 // Operator mappings for the tokens and their literal repr
 define_ops! {
-    "+" => (Operator::Add, "add", op_add);
+    "+" => (Operator::Add, "add", 1(2): op_add);
 
-    "-" => (Operator::Sub, "sub", |_: Scope| Ok(()));
+    "-" => (Operator::Sub, "sub", 1(2): op_sub);
 
-    "/" => (Operator::Div, "div", |_: Scope| Ok(()));
+    "/" => (Operator::Div, "div", 1(2): op_div);
 
-    "*" => (Operator::Mul, "mul", |_: Scope| Ok(()));
+    "*" => (Operator::Mul, "mul", 1(2): op_mul);
 
-    "=" => (Operator::Eq, "eq", |_: Scope| Ok(()));
+    "%" => (Operator::Mod, "mod", 1(2): op_mod);
 
-    "!=" => (Operator::Neq, "neq", |_: Scope| Ok(()));
+    "=" => (Operator::Eq, "eq", 0(0): |_: Scope| Ok(()));
 
-    ">" => (Operator::Gt, "gt", |_: Scope| Ok(()));
+    "!=" => (Operator::Neq, "neq", 0(0): |_: Scope| Ok(()));
 
-    "<" => (Operator::Lt, "lt", |_: Scope| Ok(()));
+    ">" => (Operator::Gt, "gt", 0(0): |_: Scope| Ok(()));
 
-    ">=" => (Operator::Gte, "gte", |_: Scope| Ok(()));
+    "<" => (Operator::Lt, "lt", 0(0): |_: Scope| Ok(()));
 
-    "<=" => (Operator::Lte, "lte", |_: Scope| Ok(()));
+    ">=" => (Operator::Gte, "gte", 0(0): |_: Scope| Ok(()));
 
-    "!" => (Operator::Assign, "tmpa", |_: Scope| Ok(()));
+    "<=" => (Operator::Lte, "lte", 0(0): |_: Scope| Ok(()));
 
-    ";" => (Operator::Pop, "pop", |_: Scope| Ok(()));
+    "!" => (Operator::Assign, "tmpa", 0(0): |_: Scope| Ok(()));
 
-    ":" => (Operator::Swap, "swap", |_: Scope| Ok(()));
+    ";" => (Operator::Pop, "pop", 0(0): |_: Scope| Ok(()));
 
-    "." => (Operator::Dup, "dup", |_: Scope| Ok(()));
+    ":" => (Operator::Swap, "swap", 0(0): |_: Scope| Ok(()));
 
-    "?" => (Operator::Call, "call", |_: Scope| Ok(()))
+    "." => (Operator::Dup, "dup", 0(0): |_: Scope| Ok(()));
+
+    "?" => (Operator::Call, "call", 0(0): |_: Scope| Ok(()))
 }
 
 define_builtins! {
-    "print" => (Builtin::Print, |scope: Scope| {
-        let mut scope = scope.borrow_mut();
-        let val = scope.pop_value()?;
-        println!("{val}");
+    "print" => (Builtin::Print, 0(1): |v: Value| {
+        println!("{v}");
         Ok(())
     })
 }
 
-fn op_add(scope: Scope) -> Status {
-    let mut scope = scope.borrow_mut();
-    let r = scope.pop_value()?;
-    let l = scope.pop_value()?;
-    scope.push_val(l.add(r)?);
-    Ok(())
+fn op_add(left: Value, right: Value) -> Status<Value> {
+    left + right
+}
+
+fn op_sub(left: Value, right: Value) -> Status<Value> {
+    left - right
+}
+
+fn op_mul(left: Value, right: Value) -> Status<Value> {
+    left * right
+}
+
+fn op_div(left: Value, right: Value) -> Status<Value> {
+    left / right
+}
+
+fn op_mod(left: Value, right: Value) -> Status<Value> {
+    left % right
 }

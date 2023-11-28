@@ -10,6 +10,7 @@ pub enum Operator {
     Sub,
     Div,
     Mul,
+    Mod,
     Eq,
     Neq,
     Gt,

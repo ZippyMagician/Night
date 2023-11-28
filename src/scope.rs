@@ -45,7 +45,7 @@ impl ScopeInternal {
         self.stack.push(val);
     }
 
-    pub fn push_val(&mut self, val: Value) {
+    pub fn push_value(&mut self, val: Value) {
         self.stack.push(ScopeEnv::Value(val));
     }
 }

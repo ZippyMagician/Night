@@ -110,7 +110,7 @@ impl<'a> Night<'a> {
         use Instr::*;
 
         match instr {
-            Push(v, _) => self.scope.borrow_mut().push_val(v),
+            Push(v, _) => self.scope.borrow_mut().push_value(v),
             Op(o, _) => {
                 if let Err(e) = o.call(self.scope.clone()) {
                     eprintln!("Error(operator): {e:?}");

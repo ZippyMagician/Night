@@ -1,5 +1,5 @@
 use std::fmt::{self, Display};
-use std::ops::Add;
+use std::ops::{Add, Sub, Mul, Div, Rem};
 
 use crate::utils::error::{NightError, Status};
 
@@ -31,23 +31,38 @@ impl Value {
     }
 }
 
-impl Add for Value {
-    type Output = Status<Value>;
+// Macro to quickly impl the various arithmetic operations for `Value`
+macro_rules! impl_arith_ops {
+    ($($name:ident, $f:ident, $lit:literal, [$a1:ident, $a2:ident] $operation:block);*;) => {
+        $(
+            impl $name for Value {
+                type Output = Status<Value>;
 
-    fn add(self, rhs: Self) -> Self::Output {
-        match self.t {
-            Type::Num(l) => match rhs.t {
-                Type::Num(r) => Ok(Value::from(l + r)),
-                _ => Err(NightError::UnsupportedType(
-                    "Cannot add a number with a non-number.".to_string(),
-                )),
-            },
-            _ => Err(NightError::UnsupportedType(
-                "Cannot add a number with a non-number.".to_string(),
-            )),
-        }
+                fn $f(self, rhs: Self) -> Self::Output {
+                    if let Type::Num($a1) = self.t {
+                        if let Type::Num($a2) = rhs.t {
+                            return Ok(Value::from($operation));
+                        }
+                    }
+
+                    Err(NightError::UnsupportedType(
+                        concat!("Cannot call '", $lit, "' on non-numbers.").to_string(),
+                    ))
+                }
+            }
+        )*
     }
 }
+
+impl_arith_ops!{
+    Add, add, "add", [l, r] {l + r};
+    Sub, sub, "sub", [l, r] {l - r};
+    Mul, mul, "mul", [l, r] {l * r};
+    Div, div, "div", [l, r] {l / r};
+    Rem, rem, "mod", [l, r] {l % r};
+}
+
+
 
 impl Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
