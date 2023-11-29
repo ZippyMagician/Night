@@ -71,7 +71,7 @@ impl<'a> Span<'a> {
     }
 
     fn fmt_line(&self, line: usize) -> String {
-        format!("{line:>7}| {}\n", self.code.lines().nth(line).unwrap())
+        format!("{line:>7}| {}\n", self.code.lines().nth(line).unwrap().trim_start())
     }
 
     fn fmt_arrow(&self, start: usize, len: usize) -> String {
@@ -122,7 +122,7 @@ impl<'a> Display for Span<'a> {
         )?;
         if self.line_start == self.line_end {
             write!(f, "{}", self.fmt_line(self.line_start))?;
-            writeln!(f, "         {} Here.", self.fmt_arrow(lefti, self.len))?;
+            writeln!(f, "         {} Here.", self.fmt_arrow(lefti, self.len).trim_start())?;
         } else {
             write!(f, "{}", self.fmt_line(self.line_start))?;
             writeln!(f, "         {} From here...", self.fmt_arrow(lefti, 1))?;
