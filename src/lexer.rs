@@ -70,14 +70,36 @@ impl<'a> Span<'a> {
         }
     }
 
-    fn fmt_line(&self, line: usize) -> String {
-        format!("{line:>7}| {}\n", self.code.lines().nth(line).unwrap().trim_start())
+    pub fn between(left: &Span<'a>, right: &Span<'a>) -> Self {
+        Self {
+            code: left.code,
+            start: left.start,
+            len: (left.start + left.len).abs_diff(right.start + right.len) + 1,
+            line_start: std::cmp::min(left.line_start, right.line_start),
+            line_end: std::cmp::max(left.line_end, right.line_end),
+        }
     }
 
-    fn fmt_arrow(&self, start: usize, len: usize) -> String {
-        let mut buf = String::with_capacity(start + len);
-        for i in 0..(start + len) {
-            if i < start {
+    fn fmt_line(&self, line: usize) -> String {
+        format!("{line:>7}| {}", self.code.lines().nth(line).unwrap().trim())
+    }
+
+    fn fmt_arrow(&self, on_start: bool, start: usize, len: usize) -> String {
+        let l = self
+            .code
+            .lines()
+            .nth(if on_start {
+                self.line_start
+            } else {
+                self.line_end
+            })
+            .unwrap();
+        let diff = l.len() - l.trim_start().len();
+
+        let mut buf = String::with_capacity(start + len - diff + 9);
+        buf.push_str("         ");
+        for i in 0..(start + len - diff) {
+            if i < start - diff {
                 buf.push(' ');
             } else {
                 buf.push('_');
@@ -87,27 +109,17 @@ impl<'a> Span<'a> {
     }
 
     fn get_index(&self) -> (usize, usize) {
-        let left = self.start
-            - self
-                .code
-                .lines()
-                .take(self.line_start)
-                .map(str::len)
-                .sum::<usize>()
-            - self.line_start;
+        let offset: usize = self.code.lines().take(self.line_start).map(str::len).sum();
+        let left = self.start - offset - self.line_start;
+
         let right;
         if self.line_start == self.line_end {
-            right = left + self.len - 1;
+            right = left + self.len;
         } else {
-            let offset: usize = self
-                .code
-                .lines()
-                .skip(self.line_start)
-                .take(self.line_end - self.line_start)
-                .map(str::len)
-                .sum();
-            right = left + self.len - offset - self.line_end + self.line_start;
+            let offset: usize = self.code.lines().take(self.line_end).map(str::len).sum();
+            right = self.start + self.len - offset - self.line_end;
         }
+
         (left, right)
     }
 }
@@ -120,16 +132,16 @@ impl<'a> Display for Span<'a> {
             "[({}:{}) => ({}:{})]:",
             self.line_start, lefti, self.line_end, righti
         )?;
+
         if self.line_start == self.line_end {
-            write!(f, "{}", self.fmt_line(self.line_start))?;
-            writeln!(f, "         {} Here.", self.fmt_arrow(lefti, self.len).trim_start())?;
+            writeln!(f, "{}", self.fmt_line(self.line_start))?;
+            writeln!(f, "{} Here.", self.fmt_arrow(true, lefti, self.len))
         } else {
-            write!(f, "{}", self.fmt_line(self.line_start))?;
-            writeln!(f, "         {} From here...", self.fmt_arrow(lefti, 1))?;
-            write!(f, "{}", self.fmt_line(self.line_end))?;
-            writeln!(f, "         {} ...to here.", self.fmt_arrow(righti, 1))?;
+            writeln!(f, "{}", self.fmt_line(self.line_start))?;
+            writeln!(f, "{} From here...", self.fmt_arrow(true, lefti, 1))?;
+            writeln!(f, "{}", self.fmt_line(self.line_end))?;
+            writeln!(f, "{} ...to here.", self.fmt_arrow(false, righti, 1))
         }
-        Ok(())
     }
 }
 
@@ -250,7 +262,7 @@ impl<'a> Lexer<'a> {
 
     fn calculate_var_bounds(&mut self, start: usize) -> (usize, usize) {
         let mut end = start + 1;
-        while self.is_peek_match(|&c| c == '-' || c.is_ascii_alphanumeric()) {
+        while self.is_peek_match(|&c| c == '_' || c.is_ascii_alphanumeric()) {
             self.chars.next();
             end += 1;
         }
