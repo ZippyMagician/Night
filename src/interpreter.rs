@@ -156,7 +156,7 @@ impl<'a> Night<'a> {
         let def_span = self.spans.len() - 1;
         let name = match self.tokens.next() {
             Some((Token::Symbol(s), _)) => s,
-            _ => return night_err!(Syntax, "Expected 'Symbol' to follow a 'Define' token."),
+            _ => return night_err!(Syntax, "Expected a 'Symbol' to follow the 'Define' declaration."),
         };
         let sym = Instr::Push(Value::from(name), 0);
 
