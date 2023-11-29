@@ -1,3 +1,4 @@
+use crate::interpreter::Instr;
 use crate::scope::Scope;
 use crate::utils::error::Status;
 use crate::value::Value;
@@ -10,6 +11,22 @@ pub trait InlineFunction {
 impl InlineFunction for fn(Scope) -> Status {
     fn call(&self, scope: Scope) -> Status {
         self(scope)
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct BiFunction {
+    pub instrs: Vec<Instr>,
+}
+
+impl<T> From<T> for BiFunction
+where
+    T: Into<Vec<Instr>>,
+{
+    fn from(value: T) -> Self {
+        Self {
+            instrs: value.into(),
+        }
     }
 }
 

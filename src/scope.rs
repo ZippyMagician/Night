@@ -1,14 +1,14 @@
 use std::collections::HashMap;
 use std::fmt::{self, Display};
-use std::rc::Rc;
 
 use crate::utils::error::{night_err, NightError, Status};
-use crate::utils::function::InlineFunction;
+use crate::utils::function::BiFunction;
 use crate::value::Value;
 
 #[derive(Clone)]
 pub enum ScopeEnv {
-    Function(Rc<dyn InlineFunction>),
+    // TODO: See `interpreter.rs`'s `Instr::PushFunc` for message
+    Function(BiFunction),
     Value(Value),
 }
 

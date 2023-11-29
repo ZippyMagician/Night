@@ -1,33 +1,49 @@
 use std::cell::RefCell;
 use std::collections::VecDeque;
-use std::fmt::{self, Display};
+use std::fmt::{self, Debug, Display};
 use std::rc::Rc;
 use std::vec::IntoIter;
 
 use crate::builtin::{Builtin, Operator, BUILTIN_MAP};
 use crate::lexer::{LexTok, Span, Token};
-use crate::scope::{Scope, ScopeInternal};
+use crate::scope::{Scope, ScopeEnv, ScopeInternal};
 use crate::utils::error::{self, night_err, NightError, Status};
-use crate::utils::function::InlineFunction;
+use crate::utils::function::{BiFunction, InlineFunction};
 use crate::value::Value;
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub enum Instr {
     Push(Value, usize),
-    // PushFunc(...),
+    // TODO: If I want to simplify some definitions, I need to change this to a `Rc<dyn InlineFunction>`
+    // and figure out how to handle `BiFunction` for that case, so I can "unwrap" some blocks if they are
+    // a single operator, builtin, or some symbol
+    PushFunc(BiFunction, usize),
     PushSym(String, bool, usize),
     Op(Operator, usize),
     Internal(Builtin, usize),
     // Call(...),
-    Guard(Vec<String>),
-    Drop(Vec<String>),
-    StartBlock(usize),
-    EndBlock { start: usize, len: usize },
-    StartArray(usize),
-    EndArray { start: usize, len: usize },
-    StartParen(usize),
-    EndParen { start: usize, len: usize },
-    Define(bool, usize),
+    Guard(Vec<String>, usize),
+    Drop(Vec<String>, usize),
+    //StartBlock(usize),
+    //EndBlock { start: usize, len: usize },
+    //StartArray(usize),
+    //EndArray { start: usize, len: usize },
+    //StartParen(usize),
+    //EndParen { start: usize, len: usize },
+}
+
+impl Instr {
+    pub fn get_span(&self) -> usize {
+        match self {
+            Instr::Push(_, s) => *s,
+            Instr::PushFunc(_, s) => *s,
+            Instr::PushSym(_, _, s) => *s,
+            Instr::Op(_, s) => *s,
+            Instr::Internal(_, s) => *s,
+            Instr::Guard(_, s) => *s,
+            Instr::Drop(_, s) => *s,
+        }
+    }
 }
 
 pub struct Night<'a> {
@@ -42,16 +58,15 @@ pub struct Night<'a> {
 
 macro_rules! push_instr {
     ($inst:expr, $s:expr) => {
-        $s.instrs.push_front($inst($s.spans.len() - 1))
+        $s.instrs.push_back($inst($s.spans.len() - 1))
     };
 
     ($inst:expr, $arg:expr, $s:expr) => {
-        $s.instrs.push_front($inst($arg, $s.spans.len() - 1))
+        $s.instrs.push_back($inst($arg, $s.spans.len() - 1))
     };
 
     ($inst:expr, $arg1:expr, $arg2:expr, $s:expr) => {
-        $s.instrs
-            .push_front($inst($arg1, $arg2, $s.spans.len() - 1))
+        $s.instrs.push_back($inst($arg1, $arg2, $s.spans.len() - 1))
     };
 }
 
@@ -66,12 +81,22 @@ impl<'a> Night<'a> {
         }
     }
 
-    pub fn child_process(&self, instrs: VecDeque<Instr>) -> Self {
+    pub fn partial_new(instrs: impl Into<VecDeque<Instr>>, scope: Scope) -> Self {
+        Self {
+            _code: "".into(),
+            tokens: vec![].into_iter(),
+            spans: Vec::new(),
+            instrs: instrs.into(),
+            scope,
+        }
+    }
+
+    pub fn clone_child(&self, instrs: impl Into<VecDeque<Instr>>) -> Self {
         Self {
             _code: self._code.clone(),
             tokens: vec![].into_iter(),
             spans: self.spans.clone(),
-            instrs,
+            instrs: instrs.into(),
             scope: Rc::new(RefCell::new(self.scope.borrow().to_owned().clone())),
         }
     }
@@ -82,9 +107,9 @@ impl<'a> Night<'a> {
 
     pub fn init(&mut self) {
         while let Some((tok, span)) = self.tokens.next() {
-            self.spans.push(span.clone());
+            self.spans.push(span);
             if let Err(e) = self.build_instr(tok) {
-                error::error(e, span);
+                error::error(e, self.spans[self.spans.len() - 1].clone());
             }
         }
     }
@@ -99,7 +124,7 @@ impl<'a> Night<'a> {
             Token::OpenCurly => self.parse_block()?,
             Token::CloseCurly => return night_err!(Syntax, "Unbalanced block."),
             Token::Define => self.parse_define()?,
-            Token::Symbol(_) => self.instrs.push_front(self.maybe_builtin(tok)),
+            Token::Symbol(_) => self.instrs.push_back(self.maybe_builtin(tok)),
             Token::Newline | Token::EOF => {} // skip
             Token::Pipe => return night_err!(Syntax, "Invalid usage of the 'Const' identifier."),
             _ => return night_err!(Unimplemented, format!("Token '{tok:?}'.")),
@@ -123,55 +148,87 @@ impl<'a> Night<'a> {
     }
 
     fn parse_block(&mut self) -> Status {
-        let mut span_queue = Vec::new();
-        span_queue.push(self.spans.len() - 1);
-        push_instr!(Instr::StartBlock, self);
+        let mut block_queue = Vec::new();
+        block_queue.push((self.instrs.len(), self.spans.len() - 1));
 
         while let Some((t, s)) = self.tokens.next() {
             self.spans.push(s);
 
             // Avoid excessive recursion. Technically I could just call `self.build_instr` without the if statement
-            if matches!(t, Token::CloseCurly) {
-                // Will never encounter a situation where it is unbalanced inside
-                let start = span_queue.pop().unwrap();
-                self.instrs.push_front(Instr::EndBlock {
-                    start,
-                    len: self.spans.len() - start - 2,
-                });
-                if span_queue.is_empty() {
-                    break;
+            match t {
+                Token::CloseCurly => {
+                    // This will never be `None`
+                    let (start, span_start) = block_queue.pop().unwrap();
+                    let span_end = self.spans.len() - 1;
+                    let block = self.instrs.split_off(start);
+                    self.spans.push(Span::between(
+                        &self.spans[span_start],
+                        &self.spans[span_end],
+                    ));
+                    push_instr!(Instr::PushFunc, BiFunction::from(block), self);
+
+                    if block_queue.is_empty() {
+                        break;
+                    }
                 }
-            } else if matches!(t, Token::OpenCurly) {
-                span_queue.push(self.spans.len() - 1);
-                push_instr!(Instr::StartBlock, self);
-            } else {
-                self.build_instr(t)?;
+                Token::OpenCurly => block_queue.push((self.instrs.len(), self.spans.len() - 1)),
+                _ => self.build_instr(t)?,
             }
         }
 
-        Ok(())
+        if block_queue.is_empty() {
+            Ok(())
+        } else {
+            self.spans.push(Span::between(
+                &self.spans[block_queue.pop().unwrap().1],
+                self.spans.last().unwrap(),
+            ));
+            night_err!(Syntax, "Unbalanced block.")
+        }
     }
 
     fn parse_define(&mut self) -> Status {
         let def_span = self.spans.len() - 1;
-        let name = match self.tokens.next() {
-            Some((Token::Symbol(s), _)) => s,
-            _ => return night_err!(Syntax, "Expected a 'Symbol' to follow the 'Define' declaration."),
-        };
-        let sym = Instr::Push(Value::from(name), 0);
+        let name;
+        if let Some((Token::Symbol(s), span)) = self.tokens.next() {
+            name = s.to_string();
+            self.spans.push(span);
+        } else {
+            return night_err!(
+                Syntax,
+                "Expected a 'Symbol' to follow the 'Define' declaration."
+            );
+        }
 
-        let mut def = VecDeque::new();
+        let name_span = self.spans.len() - 1;
         let (start, span) = self.tokens.next().ok_or(NightError::Syntax(
             "Definition cannot be empty.".to_string(),
         ))?;
-        let is_const = matches!(start, Token::Pipe);
+
+        let is_const = start == Token::Pipe;
         let orig_len = self.instrs.len();
 
         if !is_const {
             self.spans.push(span);
-            self.build_instr(start)?;
+            self.build_instr(start.clone())?;
         }
 
+        // Body of definition is either a single block or a sequence of tokens followed by a newline/eof
+        if start != Token::OpenCurly {
+            self.parse_define_body(def_span, orig_len, is_const)?;
+        }
+
+        self.instrs
+            .push_back(Instr::Push(Value::from(name), name_span));
+        self.instrs
+            .push_back(Instr::Internal(Builtin::Def, def_span));
+
+        Ok(())
+    }
+
+    #[inline]
+    fn parse_define_body(&mut self, start: usize, orig_len: usize, is_const: bool) -> Status {
+        let mut def = VecDeque::new();
         while let Some((tok, s)) = self.tokens.next() {
             self.spans.push(s);
             if tok == Token::Newline || tok == Token::EOF {
@@ -182,11 +239,11 @@ impl<'a> Night<'a> {
 
         let len = self.instrs.len() - orig_len;
         for _ in 0..len {
-            def.push_back(self.instrs.pop_front().unwrap());
+            def.push_front(self.instrs.pop_back().unwrap());
         }
 
         if is_const {
-            let mut child = self.child_process(def);
+            let mut child = self.clone_child(def);
             child.exec();
             let mut scope = child.get_scope().borrow().to_owned();
             if scope.stack_len() != 1 {
@@ -194,27 +251,22 @@ impl<'a> Night<'a> {
             }
 
             self.instrs
-                .push_front(Instr::Push(scope.pop_value()?, def_span));
+                .push_back(Instr::Push(scope.pop_value()?, start));
         } else {
-            self.instrs.push_front(Instr::StartBlock(def_span));
-            for instr in def.into_iter().rev() {
-                self.instrs.push_front(instr);
-            }
-            self.instrs.push_front(Instr::EndBlock {
-                start: def_span,
-                len,
-            });
+            let span_start = def[0].get_span();
+            let span_end = def[def.len() - 1].get_span();
+            self.spans.push(Span::between(
+                &self.spans[span_start],
+                &self.spans[span_end],
+            ));
+            push_instr!(Instr::PushFunc, BiFunction::from(def), self);
         }
-
-        self.instrs.push_front(sym);
-        self.instrs
-            .push_front(Instr::Internal(Builtin::Def, def_span));
 
         Ok(())
     }
 
     pub fn exec(&mut self) {
-        while let Some(instr) = self.instrs.pop_back() {
+        while let Some(instr) = self.instrs.pop_front() {
             self.exec_instr(instr);
         }
     }
@@ -225,14 +277,23 @@ impl<'a> Night<'a> {
 
         match instr {
             Push(v, _) => self.scope.borrow_mut().push_value(v),
+            // When a symbol is defined as a function, it is executed in place
             PushSym(v, false, i) => {
-                let mut s = self.scope.borrow_mut();
-                let value = match s.get_def(v) {
+                let definition = match self.scope.borrow().get_def(v) {
                     Ok(inner) => inner.clone(),
                     Err(e) => error::error(e, self.spans[i].clone()),
                 };
-                s.push(value);
+
+                match definition {
+                    ScopeEnv::Value(v) => self.scope.borrow_mut().push_value(v),
+                    ScopeEnv::Function(f) => {
+                        for instr in f.instrs {
+                            self.exec_instr(instr)
+                        }
+                    }
+                }
             }
+            PushFunc(f, _) => self.scope.borrow_mut().push(ScopeEnv::Function(f)),
             Op(o, i) => {
                 if let Err(e) = o.call(self.scope.clone()) {
                     error::error(e, self.spans[i].clone());
@@ -244,6 +305,21 @@ impl<'a> Night<'a> {
                 }
             }
             _ => todo!(),
+        }
+    }
+}
+
+impl Debug for Instr {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Instr::Push(v, _) => write!(f, "{v}"),
+            Instr::PushFunc(_, _) => write!(f, "<function>"),
+            Instr::PushSym(s, false, _) => write!(f, "{s}"),
+            Instr::PushSym(s, true, _) => write!(f, "${s}"),
+            Instr::Op(o, _) => write!(f, "{o:?}"),
+            Instr::Internal(b, _) => write!(f, "{b:?}"),
+            Instr::Guard(syms, _) => write!(f, "<guard: {syms:?}>"),
+            Instr::Drop(syms, _) => write!(f, "<end_guard: {syms:?}>"),
         }
     }
 }
