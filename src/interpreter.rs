@@ -6,7 +6,8 @@ use std::vec::IntoIter;
 
 use crate::builtin::{Builtin, Operator, BUILTIN_MAP};
 use crate::lexer::{LexTok, Span, Token};
-use crate::scope::{Scope, ScopeEnv, ScopeInternal};
+use crate::scope::{Scope, ScopeInternal, StackVal};
+use crate::utils;
 use crate::utils::error::{self, night_err, NightError, Status};
 use crate::utils::function::{BiFunction, InlineFunction};
 use crate::value::Value;
@@ -23,7 +24,7 @@ pub enum Instr {
     Internal(Builtin, usize),
     // Call(...),
     Guard(Vec<String>, usize),
-    Drop(Vec<String>, usize),
+    GuardEnd(Vec<String>, usize),
     //StartBlock(usize),
     //EndBlock { start: usize, len: usize },
     //StartArray(usize),
@@ -41,7 +42,7 @@ impl Instr {
             Instr::Op(_, s) => *s,
             Instr::Internal(_, s) => *s,
             Instr::Guard(_, s) => *s,
-            Instr::Drop(_, s) => *s,
+            Instr::GuardEnd(_, s) => *s,
         }
     }
 }
@@ -121,13 +122,24 @@ impl<'a> Night<'a> {
             Token::String(s) => push_instr!(Instr::Push, Value::from(s.to_string()), self),
             Token::Register(s) => push_instr!(Instr::PushSym, s.to_string(), true, self),
             Token::Op(o) => push_instr!(Instr::Op, o, self),
-            Token::OpenCurly => self.parse_block()?,
+            Token::OpenParen => {
+                let guard = self.parse_guard()?;
+                match self.tokens.next() {
+                    Some((Token::OpenCurly, span)) => {
+                        self.spans.push(span);
+                        self.parse_block(Some(guard))?;
+                    }
+                    _ => return night_err!(Syntax, "A guard statement is only valid either before the body of a '->' definition or preceeding a block."),
+                }
+            }
+            Token::CloseParen => return night_err!(Syntax, "Unbalanced parenthesis."),
+            Token::OpenCurly => self.parse_block(None)?,
             Token::CloseCurly => return night_err!(Syntax, "Unbalanced block."),
             Token::Define => self.parse_define()?,
             Token::Symbol(_) => self.instrs.push_back(self.maybe_builtin(tok)),
             Token::Newline | Token::EOF => {} // skip
             Token::Pipe => return night_err!(Syntax, "Invalid usage of the 'Const' identifier."),
-            _ => return night_err!(Unimplemented, format!("Token '{tok:?}'.")),
+            _ => return night_err!(Unimplemented, format!("Token '{tok:?}'")),
         }
 
         Ok(())
@@ -147,7 +159,7 @@ impl<'a> Night<'a> {
         }
     }
 
-    fn parse_block(&mut self) -> Status {
+    fn parse_block(&mut self, guard: Option<Vec<String>>) -> Status {
         let mut block_queue = Vec::new();
         block_queue.push((self.instrs.len(), self.spans.len() - 1));
 
@@ -160,11 +172,18 @@ impl<'a> Night<'a> {
                     // This will never be `None`
                     let (start, span_start) = block_queue.pop().unwrap();
                     let span_end = self.spans.len() - 1;
-                    let block = self.instrs.split_off(start);
+                    let mut block = self.instrs.split_off(start);
                     self.spans.push(Span::between(
                         &self.spans[span_start],
                         &self.spans[span_end],
                     ));
+
+                    // Add guard to function if it is specified
+                    if guard.is_some() && block_queue.is_empty() {
+                        let guard = guard.clone().unwrap();
+                        block.push_front(Instr::Guard(guard.clone(), span_start - 1));
+                        block.push_back(Instr::GuardEnd(guard, span_start - 1));
+                    }
                     push_instr!(Instr::PushFunc, BiFunction::from(block), self);
 
                     if block_queue.is_empty() {
@@ -201,10 +220,23 @@ impl<'a> Night<'a> {
         }
 
         let name_span = self.spans.len() - 1;
-        let (start, span) = self.tokens.next().ok_or(NightError::Syntax(
+        let (mut start, mut span) = self.tokens.next().ok_or(NightError::Syntax(
             "Definition cannot be empty.".to_string(),
         ))?;
 
+        // Guard expression
+        let mut guard = vec![];
+        if start == Token::OpenParen {
+            self.spans.push(span.clone());
+            guard = self.parse_guard()?;
+        }
+        if !guard.is_empty() {
+            (start, span) = self.tokens.next().ok_or(NightError::Syntax(
+                "Definition cannot be empty.".to_string(),
+            ))?;
+        }
+
+        // Const definition
         let is_const = start == Token::Pipe;
         let orig_len = self.instrs.len();
 
@@ -215,7 +247,17 @@ impl<'a> Night<'a> {
 
         // Body of definition is either a single block or a sequence of tokens followed by a newline/eof
         if start != Token::OpenCurly {
-            self.parse_define_body(def_span, orig_len, is_const)?;
+            self.parse_define_body(guard, def_span, orig_len, is_const)?;
+        } else if !guard.is_empty() {
+            if let Instr::PushFunc(mut f, s) = self.instrs.pop_back().unwrap() {
+                f.instrs
+                    .insert(0, Instr::Guard(guard.clone(), self.spans.len() - 2));
+                f.instrs.push(Instr::GuardEnd(guard, self.spans.len() - 2));
+                self.instrs
+                    .push_back(Instr::PushFunc(BiFunction::from(f), s));
+            } else {
+                unreachable!();
+            }
         }
 
         self.instrs
@@ -226,8 +268,46 @@ impl<'a> Night<'a> {
         Ok(())
     }
 
+    fn parse_guard(&mut self) -> Status<Vec<String>> {
+        let mut guards = Vec::new();
+        let span_start = self.spans.len() - 1;
+        while let Some((tok, span)) = self.tokens.next() {
+            self.spans.push(span);
+            match tok {
+                Token::CloseParen => break,
+                Token::String(s) => {
+                    if utils::is_one_word(s) {
+                        guards.push(s.to_string());
+                    } else {
+                        return night_err!(Syntax, "Expected single word identifier.");
+                    }
+                }
+                _ => return night_err!(Syntax, "Expected single word identifier."),
+            }
+        }
+
+        if guards.is_empty() {
+            night_err!(
+                Syntax,
+                "Guard expression should contain at least one word identifier."
+            )
+        } else {
+            self.spans.push(Span::between(
+                &self.spans[span_start],
+                self.spans.last().unwrap(),
+            ));
+            Ok(guards)
+        }
+    }
+
     #[inline]
-    fn parse_define_body(&mut self, start: usize, orig_len: usize, is_const: bool) -> Status {
+    fn parse_define_body(
+        &mut self,
+        guard: Vec<String>,
+        start: usize,
+        orig_len: usize,
+        is_const: bool,
+    ) -> Status {
         let mut def = VecDeque::new();
         while let Some((tok, s)) = self.tokens.next() {
             self.spans.push(s);
@@ -239,6 +319,7 @@ impl<'a> Night<'a> {
 
         let len = self.instrs.len() - orig_len;
         for _ in 0..len {
+            // Number of extra values tracked, so there will never be a panic
             def.push_front(self.instrs.pop_back().unwrap());
         }
 
@@ -259,6 +340,11 @@ impl<'a> Night<'a> {
                 &self.spans[span_start],
                 &self.spans[span_end],
             ));
+
+            if !guard.is_empty() {
+                def.push_front(Instr::Guard(guard.clone(), span_start - 1));
+                def.push_back(Instr::GuardEnd(guard, span_start - 1));
+            }
             push_instr!(Instr::PushFunc, BiFunction::from(def), self);
         }
 
@@ -279,21 +365,35 @@ impl<'a> Night<'a> {
             Push(v, _) => self.scope.borrow_mut().push_value(v),
             // When a symbol is defined as a function, it is executed in place
             PushSym(v, false, i) => {
-                let definition = match self.scope.borrow().get_def(v) {
+                let definition = match self.scope.borrow().get_sym(v) {
                     Ok(inner) => inner.clone(),
                     Err(e) => error::error(e, self.spans[i].clone()),
                 };
 
                 match definition {
-                    ScopeEnv::Value(v) => self.scope.borrow_mut().push_value(v),
-                    ScopeEnv::Function(f) => {
+                    StackVal::Value(v) => self.scope.borrow_mut().push_value(v),
+                    StackVal::Function(f) => {
                         for instr in f.instrs {
                             self.exec_instr(instr)
                         }
                     }
                 }
             }
-            PushFunc(f, _) => self.scope.borrow_mut().push(ScopeEnv::Function(f)),
+            PushSym(v, true, i) => {
+                let mut s = self.scope.borrow_mut();
+                let value = match s.get_reg(v) {
+                    Ok(inner) => inner.clone(),
+                    Err(e) => error::error(e, self.spans[i].clone()),
+                };
+
+                s.push(value)
+            }
+            PushFunc(f, _) => self.scope.borrow_mut().push(StackVal::Function(f)),
+            Op(Operator::Call, i) => {
+                if let Err(e) = self.exec_op_call() {
+                    error::error(e, self.spans[i].clone());
+                }
+            }
             Op(o, i) => {
                 if let Err(e) = o.call(self.scope.clone()) {
                     error::error(e, self.spans[i].clone());
@@ -304,8 +404,37 @@ impl<'a> Night<'a> {
                     error::error(e, self.spans[i].clone());
                 }
             }
-            _ => todo!(),
+            Guard(guard, i) => {
+                let mut s = self.scope.borrow_mut();
+                for g in guard {
+                    if let Err(e) = s.add_guard(g) {
+                        error::error(e, self.spans[i].clone());
+                    }
+                }
+            }
+            GuardEnd(guard, _) => {
+                let mut s = self.scope.borrow_mut();
+                for g in guard {
+                    s.rem_guard(g);
+                }
+            }
         }
+    }
+
+    fn exec_op_call(&mut self) -> Status {
+        let top = self.scope.borrow_mut().pop()?;
+        if let StackVal::Function(f) = top {
+            for instr in f.instrs {
+                self.exec_instr(instr);
+            }
+        } else {
+            return night_err!(
+                UnsupportedType,
+                "Expected a function on the top of the stack."
+            );
+        }
+
+        Ok(())
     }
 }
 
@@ -319,7 +448,7 @@ impl Debug for Instr {
             Instr::Op(o, _) => write!(f, "{o:?}"),
             Instr::Internal(b, _) => write!(f, "{b:?}"),
             Instr::Guard(syms, _) => write!(f, "<guard: {syms:?}>"),
-            Instr::Drop(syms, _) => write!(f, "<end_guard: {syms:?}>"),
+            Instr::GuardEnd(syms, _) => write!(f, "<guard_end: {syms:?}>"),
         }
     }
 }

@@ -1,8 +1,9 @@
 use night::interpreter::Night;
+use night::lexer::{Lexer, Token};
 
 fn main() {
     // Simulate execution of a program for testing
-    const TEST: &'static str = r#"
+    /*const TEST: &'static str = r#"
         -> value | 4 5 +
         -> double . +
         -> do_stuff {
@@ -13,14 +14,28 @@ fn main() {
         print
         ; 4 . / inc :
         value double do_stuff
+    "#;*/
+
+    const TEST: &'static str = r#"
+    -> dip (:dip) : :dip ! ; ? $dip
+    3 6 {1 +} dip
+    :dip undef ;
     "#;
 
-    let mut lex = night::lexer::Lexer::new(TEST);
+    let mut lex = Lexer::new(TEST);
     let tokens = lex.tokenize();
-    let mut night = Night::new(TEST, tokens);
+    let mut night = Night::new(TEST, tokens.clone());
+
+    println!(
+        "{:?}\n---",
+        tokens
+            .iter()
+            .map(|(n, _)| n.clone())
+            .collect::<Vec<Token>>()
+    );
 
     night.init();
-    println!("{night}");
+    println!("{night}\n---");
 
     night.exec();
     print!("Stack:\n{}", night.get_scope().borrow());

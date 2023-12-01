@@ -226,7 +226,7 @@ impl<'a> Lexer<'a> {
                 lex_tok!(Token::Define, self, start, 2, 0)
             }
             ('-', Some(c)) if c.is_ascii_digit() => self.consume_number(start),
-            (':', Some(c @ ('-' | _))) if c.is_ascii_alphanumeric() => self.consume_word(start),
+            (':', Some(c)) if c == '_' || c.is_ascii_alphanumeric() => self.consume_word(start),
             ('$', _) => self.consume_register(start),
             ('"', _) => self.consume_string(start),
             ('|', _) => lex_tok!(Token::Pipe, self, start, 1, 0),
@@ -234,6 +234,8 @@ impl<'a> Lexer<'a> {
             (']', _) => lex_tok!(Token::CloseBracket, self, start, 1, 0),
             ('{', _) => lex_tok!(Token::OpenCurly, self, start, 1, 0),
             ('}', _) => lex_tok!(Token::CloseCurly, self, start, 1, 0),
+            ('(', _) => lex_tok!(Token::OpenParen, self, start, 1, 0),
+            (')', _) => lex_tok!(Token::CloseParen, self, start, 1, 0),
             _ if OP_MAP.contains_key(&self.input[start..start + 1]) => self.consume_op(start),
             _ => {
                 lex_err!("LexError: Unrecognized token."; self.input, start, 1, self.line => self.line)

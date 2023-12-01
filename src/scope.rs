@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fmt::{self, Display};
 
 use crate::utils::error::{night_err, NightError, Status};
@@ -6,29 +6,75 @@ use crate::utils::function::BiFunction;
 use crate::value::Value;
 
 #[derive(Clone)]
-pub enum ScopeEnv {
+pub enum StackVal {
     // TODO: See `interpreter.rs`'s `Instr::PushFunc` for message
     Function(BiFunction),
     Value(Value),
 }
 
+impl From<Value> for StackVal {
+    fn from(value: Value) -> Self {
+        Self::Value(value)
+    }
+}
+
+impl From<BiFunction> for StackVal {
+    fn from(value: BiFunction) -> Self {
+        Self::Function(value)
+    }
+}
+
 pub type Scope = std::rc::Rc<std::cell::RefCell<ScopeInternal>>;
+
+#[derive(Clone, PartialEq, Eq, Hash)]
+enum SymbolType {
+    Symbol(String),
+    Register(String),
+}
+
+impl ToString for SymbolType {
+    fn to_string(&self) -> String {
+        match self {
+            Self::Symbol(s) => s.clone(),
+            Self::Register(s) => format!("${s}"),
+        }
+    }
+}
 
 #[derive(Clone)]
 pub struct ScopeInternal {
-    stack: Vec<ScopeEnv>,
-    env: HashMap<String, ScopeEnv>,
+    stack: Vec<StackVal>,
+    guard: HashSet<String>,
+    env: HashMap<SymbolType, StackVal>,
 }
 
 impl ScopeInternal {
     pub fn create() -> Self {
         Self {
             stack: Vec::new(),
+            guard: HashSet::new(),
             env: HashMap::new(),
         }
     }
 
-    pub fn pop(&mut self) -> Status<ScopeEnv> {
+    pub fn add_guard(&mut self, g: String) -> Status {
+        if self.guard.insert(g.clone()) {
+            Ok(())
+        } else {
+            night_err!(
+                Syntax,
+                format!("Attempted to guard register '${g}' when it was already guarded.")
+            )
+        }
+    }
+
+    pub fn rem_guard(&mut self, g: String) {
+        self.guard.remove(&g);
+        // `GuardEnd` always follows `Guard`, so the register will always be defined
+        let _ = self.undef_reg(g);
+    }
+
+    pub fn pop(&mut self) -> Status<StackVal> {
         match self.stack.pop() {
             Some(v) => Ok(v),
             _ => night_err!(NothingToPop),
@@ -37,35 +83,90 @@ impl ScopeInternal {
 
     pub fn pop_value(&mut self) -> Status<Value> {
         match self.stack.pop() {
-            Some(ScopeEnv::Value(v)) => Ok(v),
+            Some(StackVal::Value(v)) => Ok(v),
             Some(_) => night_err!(UnsupportedType, "Expected literal value, found function."),
             _ => night_err!(NothingToPop),
         }
     }
 
-    pub fn push(&mut self, val: ScopeEnv) {
+    pub fn push(&mut self, val: StackVal) {
         self.stack.push(val);
     }
 
     pub fn push_value(&mut self, val: Value) {
-        self.stack.push(ScopeEnv::Value(val));
+        self.stack.push(StackVal::Value(val));
     }
 
     pub fn stack_len(&self) -> usize {
         self.stack.len()
     }
 
-    pub fn def(&mut self, sym: String, s: ScopeEnv) -> Status {
+    pub fn def_sym(&mut self, sym: String, s: StackVal) -> Status {
+        let sym = SymbolType::Symbol(sym);
         if self.env.contains_key(&sym) {
-            night_err!(SymbolRedefinition, sym)
+            night_err!(SymbolRedefinition, sym.to_string())
         } else {
             self.env.insert(sym, s);
             Ok(())
         }
     }
 
-    pub fn get_def(&self, sym: String) -> Status<&ScopeEnv> {
-        self.env.get(&sym).ok_or(NightError::UndefinedSymbol(sym))
+    pub fn def_reg(&mut self, reg: String, s: StackVal) -> Status<StackVal> {
+        let guarded = self.guard.contains(&reg);
+        let reg = SymbolType::Register(reg);
+        if self.env.contains_key(&reg) {
+            if guarded {
+                return night_err!(
+                    Runtime,
+                    format!(
+                        "Register '{}' is guarded, cannot redefine.",
+                        reg.to_string()
+                    )
+                );
+            }
+            self.env.remove(&reg);
+        }
+
+        self.env.insert(reg, s.clone());
+        Ok(s)
+    }
+
+    pub fn undef_sym(&mut self, sym: String) -> Status<StackVal> {
+        let sym = SymbolType::Symbol(sym);
+        self.env
+            .remove(&sym)
+            .ok_or(NightError::UndefinedSymbol(sym.to_string()))
+    }
+
+    pub fn undef_reg(&mut self, reg: String) -> Status {
+        if self.guard.contains(&reg) {
+            return night_err!(
+                Runtime,
+                format!(
+                    "Register '{}' is guarded, cannot undefine.",
+                    reg.to_string()
+                )
+            );
+        }
+        let reg = SymbolType::Register(reg);
+        self.env
+            .remove(&reg)
+            .map(|_| ())
+            .ok_or(NightError::UndefinedSymbol(reg.to_string()))
+    }
+
+    pub fn get_sym(&self, sym: String) -> Status<&StackVal> {
+        let sym = SymbolType::Symbol(sym);
+        self.env
+            .get(&sym)
+            .ok_or(NightError::UndefinedSymbol(sym.to_string()))
+    }
+
+    pub fn get_reg(&self, reg: String) -> Status<&StackVal> {
+        let reg = SymbolType::Register(reg);
+        self.env
+            .get(&reg)
+            .ok_or(NightError::UndefinedSymbol(reg.to_string()))
     }
 }
 
@@ -73,8 +174,8 @@ impl Display for ScopeInternal {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         for val in &self.stack {
             match val {
-                ScopeEnv::Value(v) => writeln!(f, "{v}")?,
-                ScopeEnv::Function(_) => writeln!(f, "<Function>")?,
+                StackVal::Value(v) => writeln!(f, "{v}")?,
+                StackVal::Function(_) => writeln!(f, "<Function>")?,
             }
         }
 
@@ -82,10 +183,11 @@ impl Display for ScopeInternal {
     }
 }
 
-impl From<Vec<ScopeEnv>> for ScopeInternal {
-    fn from(value: Vec<ScopeEnv>) -> Self {
+impl From<Vec<StackVal>> for ScopeInternal {
+    fn from(value: Vec<StackVal>) -> Self {
         Self {
             stack: value,
+            guard: HashSet::new(),
             env: HashMap::new(),
         }
     }

@@ -16,7 +16,7 @@ x x * print
 -> for (:_for_fn :_for_r) {
 	:_for_fn ! ; . len : :_for_r ! ;
 	{
-		$_for_r . head : 1 drop :_for_r ! ; :I def ;
+		$_for_r . head : 1 drop :_for_r ! ; :I def
 		$_for_fn ?
 		:I undef ;
 	} loop
@@ -27,7 +27,8 @@ x x * print
 | -- | -- | -- |
 | `pop` | `;` | Pop top value from stack |
 | `dup` | `.` | Duplicate top value of stack |
-| `assign` | `!` | Assign value to temp variable |
+| `defr` | `!` | Assign value to temp register |
+| `undefr` | | Unassign value from temp register. Generally not specifically called |
 | `join` | `,` | Joins top two values from stack into array |
 | `I` | | Intermediary op dependent on function |
 | `call` | `?` | Call function on top of stack |

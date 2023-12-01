@@ -32,5 +32,6 @@ pub enum Builtin {
     Dec,
     Def,
     Undef,
+    UndefReg,
     // TODO: more
 }

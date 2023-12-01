@@ -1,7 +1,8 @@
 use phf::phf_map;
 
 use super::{Builtin, Operator};
-use crate::scope::Scope;
+use crate::scope::{Scope, StackVal};
+use crate::utils;
 use crate::utils::error::{night_err, Status};
 use crate::utils::function::{self, InlineFunction};
 use crate::value::Value;
@@ -14,6 +15,10 @@ macro_rules! _define_internal {
     // 1 arg 0 outputs
     ($scope:expr, 0(1), $def:expr) => {
         function::arity1_0($def, $scope)
+    };
+    // 0 arg 1 output
+    ($scope:expr, 1(0), $def:expr) => {
+        function::arity0_1($def, $scope)
     };
     // 1 arg 1 output
     ($scope:expr, 1(1), $def:expr) => {
@@ -131,70 +136,49 @@ define_ops! {
 
     "<=" => (Operator::Lte, "lte", 0(0): |_: Scope| Ok(()));
 
-    "!" => (Operator::Assign, "tmpa", 0(0): |_: Scope| Ok(()));
+    "!" => (Operator::Assign, "defr", 1(0): op_defr);
 
-    ";" => (Operator::Pop, "pop", 0(1): op_pop);
+    ";" => (Operator::Pop, "pop", 0(0): op_pop);
 
     ":" => (Operator::Swap, "swap", 2(2): op_swap);
 
     "." => (Operator::Dup, "dup", 2(1): op_dup);
 
     "?" => (Operator::Call, "call", 0(0): |_: Scope| {
-        night_err!(Unimplemented, "An internal error occurred, this should not have been called")
+        night_err!(ContextFail, "An internal error occurred, this should not have been called")
     });
 }
 
-define_builtins! {
-    "print" => (Builtin::Print, 0(1): |v: Value| {
-        println!("{v}");
-        Ok(())
-    });
-
-    "inc" => (Builtin::Inc, 1(1): |v: Value| {
-        let n = v.as_num()?;
-        Ok(Value::from(n + 1))
-    });
-
-    "dec" => (Builtin::Dec, 1(1): |v: Value| {
-        let n = v.as_num()?;
-        Ok(Value::from(n - 1))
-    });
-
-    "def" => (Builtin::Def, 0(2): |scope: Scope| {
-        let mut s = scope.borrow_mut();
-        let name = s.pop_value()?.as_str()?;
-        let value = s.pop()?;
-        s.def(name, value)
-    });
-
-    "undef" => (Builtin::Undef, 0(1): |_: Value| {
-        night_err!(Unimplemented, "Symbol undefinition")
-    });
-}
-
-fn op_add(left: Value, right: Value) -> Status<Value> {
+fn op_add(_: Scope, left: Value, right: Value) -> Status<Value> {
     left + right
 }
 
-fn op_sub(left: Value, right: Value) -> Status<Value> {
+fn op_sub(_: Scope, left: Value, right: Value) -> Status<Value> {
     left - right
 }
 
-fn op_mul(left: Value, right: Value) -> Status<Value> {
+fn op_mul(_: Scope, left: Value, right: Value) -> Status<Value> {
     left * right
 }
 
-fn op_div(left: Value, right: Value) -> Status<Value> {
+fn op_div(_: Scope, left: Value, right: Value) -> Status<Value> {
     left / right
 }
 
-fn op_mod(left: Value, right: Value) -> Status<Value> {
+fn op_mod(_: Scope, left: Value, right: Value) -> Status<Value> {
     left % right
 }
 
-fn op_pop(arg: Value) -> Status {
-    drop(arg);
+fn op_pop(scope: Scope) -> Status {
+    scope.borrow_mut().pop()?;
     Ok(())
+}
+
+fn op_defr(scope: Scope) -> Status<StackVal> {
+    let mut s = scope.borrow_mut();
+    let name = s.pop_value()?.as_str()?;
+    let value = s.pop()?;
+    s.def_reg(name, value)
 }
 
 fn op_swap(scope: Scope) -> Status {
@@ -212,4 +196,49 @@ fn op_dup(scope: Scope) -> Status {
     s.push(val.clone());
     s.push(val);
     Ok(())
+}
+
+define_builtins! {
+    "print" => (Builtin::Print, 0(1): |_, v| {
+        println!("{v}");
+        Ok(())
+    });
+
+    "inc" => (Builtin::Inc, 1(1): |_, v| {
+        let n = v.as_num()?;
+        Ok(Value::from(n + 1))
+    });
+
+    "dec" => (Builtin::Dec, 1(1): |_, v| {
+        let n = v.as_num()?;
+        Ok(Value::from(n - 1))
+    });
+
+    "def" => (Builtin::Def, 0(2): |scope: Scope| {
+        let mut s = scope.borrow_mut();
+        let name = s.pop_value()?.as_str()?;
+        if !utils::is_one_word(&name) {
+            return night_err!(Runtime, format!("'{name}' is not a valid symbol name."))
+        }
+        let value = s.pop()?;
+        s.def_sym(name, value)
+    });
+
+    "undef" => (Builtin::Undef, 1(1): |scope, name| {
+        let mut s = scope.borrow_mut();
+        let name = name.as_str()?;
+        if !utils::is_one_word(&name) {
+            return night_err!(Runtime, format!("'${name}' is not a valid symbol name."))
+        }
+        s.undef_sym(name)
+    });
+
+    "undefr" => (Builtin::UndefReg, 0(1): |scope, name| {
+        let mut s = scope.borrow_mut();
+        let name = name.as_str()?;
+        if !utils::is_one_word(&name) {
+            return night_err!(Runtime, format!("'${name}' is not a valid register name."))
+        }
+        s.undef_reg(name)
+    });
 }
