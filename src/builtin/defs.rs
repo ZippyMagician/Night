@@ -241,4 +241,8 @@ define_builtins! {
         }
         s.undef_reg(name)
     });
+
+    "loop" => (Builtin::Loop, 0(0): |_| {
+        night_err!(ContextFail, "An internal error occurred, this should not have been called")
+    });
 }

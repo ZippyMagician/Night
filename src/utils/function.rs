@@ -33,7 +33,7 @@ where
 #[inline]
 pub fn arity0_1<T>(def: fn(Scope) -> Status<T>, scope: Scope) -> Status
 where
-    T: Into<StackVal>
+    T: Into<StackVal>,
 {
     let v = def(scope.clone())?.into();
     scope.borrow_mut().push(v);
@@ -51,7 +51,7 @@ pub fn arity1_0(def: fn(Scope, Value) -> Status, scope: Scope) -> Status {
 #[inline]
 pub fn arity1_1<T>(def: fn(Scope, Value) -> Status<T>, scope: Scope) -> Status
 where
-    T: Into<StackVal>
+    T: Into<StackVal>,
 {
     let arg = scope.borrow_mut().pop_value()?;
     let v = def(scope.clone(), arg)?.into();
@@ -62,7 +62,7 @@ where
 #[inline]
 pub fn arity2_1<T>(def: fn(Scope, Value, Value) -> Status<T>, scope: Scope) -> Status
 where
-    T: Into<StackVal>
+    T: Into<StackVal>,
 {
     let mut s = scope.borrow_mut();
     let right = s.pop_value()?;

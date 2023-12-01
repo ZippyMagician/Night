@@ -12,6 +12,22 @@ pub enum StackVal {
     Value(Value),
 }
 
+impl StackVal {
+    pub fn as_fn(self) -> Status<BiFunction> {
+        match self {
+            Self::Function(f) => Ok(f),
+            Self::Value(_) => night_err!(UnsupportedType, "Expected function, got value"),
+        }
+    }
+
+    pub fn as_value(self) -> Status<Value> {
+        match self {
+            Self::Function(_) => night_err!(UnsupportedType, "Expected value, got function"),
+            Self::Value(v) => Ok(v),
+        }
+    }
+}
+
 impl From<Value> for StackVal {
     fn from(value: Value) -> Self {
         Self::Value(value)

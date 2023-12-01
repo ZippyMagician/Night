@@ -20,6 +20,8 @@ fn main() {
     -> dip (:dip) : :dip ! ; ? $dip
     3 6 {1 +} dip
     :dip undef ;
+    -> mults (:a) :a ! 9 {. $a +} loop
+    7 mults
     "#;
 
     let mut lex = Lexer::new(TEST);

@@ -33,5 +33,6 @@ pub enum Builtin {
     Def,
     Undef,
     UndefReg,
+    Loop,
     // TODO: more
 }

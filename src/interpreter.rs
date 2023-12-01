@@ -357,6 +357,12 @@ impl<'a> Night<'a> {
         }
     }
 
+    pub fn exec_fn(&mut self, def: Vec<Instr>) {
+        for instr in def {
+            self.exec_instr(instr)
+        }
+    }
+
     #[inline]
     pub fn exec_instr(&mut self, instr: Instr) {
         use Instr::*;
@@ -372,11 +378,7 @@ impl<'a> Night<'a> {
 
                 match definition {
                     StackVal::Value(v) => self.scope.borrow_mut().push_value(v),
-                    StackVal::Function(f) => {
-                        for instr in f.instrs {
-                            self.exec_instr(instr)
-                        }
-                    }
+                    StackVal::Function(f) => self.exec_fn(f.instrs),
                 }
             }
             PushSym(v, true, i) => {
@@ -396,6 +398,11 @@ impl<'a> Night<'a> {
             }
             Op(o, i) => {
                 if let Err(e) = o.call(self.scope.clone()) {
+                    error::error(e, self.spans[i].clone());
+                }
+            }
+            Internal(Builtin::Loop, i) => {
+                if let Err(e) = self.exec_builtin_loop() {
                     error::error(e, self.spans[i].clone());
                 }
             }
@@ -422,11 +429,10 @@ impl<'a> Night<'a> {
     }
 
     fn exec_op_call(&mut self) -> Status {
-        let top = self.scope.borrow_mut().pop()?;
+        let scope = self.scope.clone();
+        let top = scope.borrow_mut().pop()?;
         if let StackVal::Function(f) = top {
-            for instr in f.instrs {
-                self.exec_instr(instr);
-            }
+            self.exec_fn(f.instrs)
         } else {
             return night_err!(
                 UnsupportedType,
@@ -434,6 +440,21 @@ impl<'a> Night<'a> {
             );
         }
 
+        Ok(())
+    }
+
+    fn exec_builtin_loop(&mut self) -> Status {
+        let mut s = self.scope.borrow_mut();
+        let def = s.pop()?.as_fn()?;
+        let count = s.pop_value()?.as_num()?;
+        drop(s);
+        if count < 0 {
+            return night_err!(Runtime, "'loop' can only take a positive integer.");
+        }
+
+        for _ in 0..count {
+            self.exec_fn(def.instrs.clone());
+        }
         Ok(())
     }
 }
