@@ -8,18 +8,19 @@ but considering I mostly wrote languages for this it may have some inspired elem
 -> x| 4 7 +
 x x * print
 
--> mults  (:a) :a ! ; 11 1 range { $a I + } for
+-> mults  (:a) :a ! ; 11 1 range { $a $I + } for
 -> mults2 (:a) :a ! 9 { . $a + } loop
 7 mults
 
--> dip (:_dip_inter) : :_dip_inter ! ; ? $_dip_inter
--> for (:_for_fn :_for_r) {
-	:_for_fn ! ; . len : :_for_r ! ;
-	{
-		$_for_r . head : 1 drop :_for_r ! ; :I def
-		$_for_fn ?
-		:I undef ;
+-> dip (:dip) : :dip ! ; ? $dip
+-> for (:for_f) {
+	:for_f ! ; . len
+	(:for_r :I) {
+		. head : 1 drop :for_r ! ; :I ! ;
+		$for_f ?
+		:I undefr $for_r
 	} loop
+	:for_r undef ;
 }
 ```
 ## Some Definitions
@@ -47,9 +48,9 @@ x x * print
 '{anything} ⇒ Literal character
 
 # Some builtins more preprocessor-directives
-STACK N fn loop ⇒ STACK fn fn ... fn [N times]
--> x  y ⇒ {y} :x def
--> x| y ⇒   y :x def
+STACK N fn loop ⇒ STACK fn? fn? ... fn? [N times]
+-> x   y ⇒ {y} :x def
+-> x | y ⇒   y :x def
 -- ⇒ comment
 
 # Other
