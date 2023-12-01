@@ -28,6 +28,15 @@ impl StackVal {
     }
 }
 
+impl Display for StackVal {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Function(def) => write!(f, "<function> {:?}", def.instrs),
+            Self::Value(v) => write!(f, "{v}"),
+        }
+    }
+}
+
 impl From<Value> for StackVal {
     fn from(value: Value) -> Self {
         Self::Value(value)

@@ -199,7 +199,8 @@ fn op_dup(scope: Scope) -> Status {
 }
 
 define_builtins! {
-    "print" => (Builtin::Print, 0(1): |_, v| {
+    "print" => (Builtin::Print, 0(0): |scope: Scope| {
+        let v = scope.borrow_mut().pop()?;
         println!("{v}");
         Ok(())
     });

@@ -80,7 +80,7 @@ impl Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self.t {
             Type::Num(l) => write!(f, "{l}"),
-            Type::Str(s) => write!(f, "{s}"),
+            Type::Str(s) => write!(f, "\"{s}\""),
         }
     }
 }

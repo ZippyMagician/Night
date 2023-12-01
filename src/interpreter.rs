@@ -462,10 +462,10 @@ impl<'a> Night<'a> {
 impl Debug for Instr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Instr::Push(v, _) => write!(f, "{v}"),
-            Instr::PushFunc(_, _) => write!(f, "<function>"),
-            Instr::PushSym(s, false, _) => write!(f, "{s}"),
-            Instr::PushSym(s, true, _) => write!(f, "${s}"),
+            Instr::Push(v, _) => write!(f, "Push({v})"),
+            Instr::PushFunc(_, _) => write!(f, "Push(<function>)"),
+            Instr::PushSym(s, false, _) => write!(f, "Exec({s})"),
+            Instr::PushSym(s, true, _) => write!(f, "Push(${s})"),
             Instr::Op(o, _) => write!(f, "{o:?}"),
             Instr::Internal(b, _) => write!(f, "{b:?}"),
             Instr::Guard(syms, _) => write!(f, "<guard: {syms:?}>"),
