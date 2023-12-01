@@ -140,7 +140,7 @@ define_ops! {
 
     ";" => (Operator::Pop, "pop", 0(0): op_pop);
 
-    ":" => (Operator::Swap, "swap", 2(2): op_swap);
+    ":" => (Operator::Swap, "swp", 2(2): op_swap);
 
     "." => (Operator::Dup, "dup", 2(1): op_dup);
 
