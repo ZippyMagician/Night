@@ -15,22 +15,13 @@ use crate::value::Value;
 #[derive(Clone)]
 pub enum Instr {
     Push(Value, usize),
-    // TODO: If I want to simplify some definitions, I need to change this to a `Rc<dyn InlineFunction>`
-    // and figure out how to handle `BiFunction` for that case, so I can "unwrap" some blocks if they are
-    // a single operator, builtin, or some symbol
     PushFunc(BiFunction, usize),
     PushSym(String, bool, usize),
     Op(Operator, usize),
     Internal(Builtin, usize),
-    // Call(...),
+    Call(usize),
     Guard(Vec<String>, usize),
     GuardEnd(Vec<String>, usize),
-    //StartBlock(usize),
-    //EndBlock { start: usize, len: usize },
-    //StartArray(usize),
-    //EndArray { start: usize, len: usize },
-    //StartParen(usize),
-    //EndParen { start: usize, len: usize },
 }
 
 impl Instr {
@@ -41,6 +32,7 @@ impl Instr {
             Instr::PushSym(_, _, s) => *s,
             Instr::Op(_, s) => *s,
             Instr::Internal(_, s) => *s,
+            Instr::Call(s) => *s,
             Instr::Guard(_, s) => *s,
             Instr::GuardEnd(_, s) => *s,
         }
@@ -121,6 +113,7 @@ impl<'a> Night<'a> {
             Token::Number(n) => push_instr!(Instr::Push, Value::from(n.parse::<i32>()?), self),
             Token::String(s) => push_instr!(Instr::Push, Value::from(s.to_string()), self),
             Token::Register(s) => push_instr!(Instr::PushSym, s.to_string(), true, self),
+            Token::Op(Operator::Call) => self.instrs.push_back(Instr::Call(self.spans.len() - 1)),
             Token::Op(o) => push_instr!(Instr::Op, o, self),
             Token::OpenParen => {
                 let guard = self.parse_guard()?;
@@ -351,15 +344,20 @@ impl<'a> Night<'a> {
         Ok(())
     }
 
+    #[inline]
     pub fn exec(&mut self) {
+        // Could directly iterate, but as of now I'm leaving it as this in case it's useful in the future.
         while let Some(instr) = self.instrs.pop_front() {
             self.exec_instr(instr);
         }
     }
 
+    // Unroll the loop to avoid excessive recursion
+    #[inline]
     pub fn exec_fn(&mut self, def: Vec<Instr>) {
-        for instr in def {
-            self.exec_instr(instr)
+        for instr in def.into_iter().rev() {
+            // self.exec_instr(instr)
+            self.instrs.push_front(instr);
         }
     }
 
@@ -391,7 +389,7 @@ impl<'a> Night<'a> {
                 s.push(value)
             }
             PushFunc(f, _) => self.scope.borrow_mut().push(StackVal::Function(f)),
-            Op(Operator::Call, i) => {
+            Call(i) => {
                 if let Err(e) = self.exec_op_call() {
                     error::error(e, self.spans[i].clone());
                 }
@@ -467,6 +465,7 @@ impl Debug for Instr {
             Instr::PushSym(s, false, _) => write!(f, "Exec({s})"),
             Instr::PushSym(s, true, _) => write!(f, "Push(${s})"),
             Instr::Op(o, _) => write!(f, "{o:?}"),
+            Instr::Call(_) => write!(f, "Operator::Call"),
             Instr::Internal(b, _) => write!(f, "{b:?}"),
             Instr::Guard(syms, _) => write!(f, "<guard: {syms:?}>"),
             Instr::GuardEnd(syms, _) => write!(f, "<guard_end: {syms:?}>"),
