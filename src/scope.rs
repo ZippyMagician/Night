@@ -193,6 +193,10 @@ impl ScopeInternal {
             .get(&reg)
             .ok_or(NightError::UndefinedSymbol(reg.to_string()))
     }
+
+    pub fn raw_stack(&mut self) -> &mut Vec<StackVal> {
+        &mut self.stack
+    }
 }
 
 impl Display for ScopeInternal {

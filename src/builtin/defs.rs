@@ -136,6 +136,8 @@ define_ops! {
 
     "<=" => (Operator::Lte, "lte", 0(0): |_: Scope| Ok(()));
 
+    "~" => (Operator::Not, "not", 1(1): op_not);
+
     "!" => (Operator::Assign, "defr", 1(0): op_defr);
 
     ";" => (Operator::Pop, "pop", 0(0): op_pop);
@@ -147,6 +149,34 @@ define_ops! {
     "?" => (Operator::Call, "call", 0(0): |_: Scope| {
         night_err!(ContextFail, "An internal error occurred, this should not have been called")
     });
+}
+
+define_builtins! {
+    "print" => (Builtin::Print, 0(0): print);
+
+    "inc" => (Builtin::Inc, 1(1): inc);
+
+    "dec" => (Builtin::Dec, 1(1): dec);
+
+    "def" => (Builtin::Def, 0(2): def);
+
+    "undef" => (Builtin::Undef, 1(1): undef);
+
+    "undefr" => (Builtin::UndefReg, 0(1): undefr);
+
+    "loop" => (Builtin::Loop, 0(0): |_| {
+        night_err!(ContextFail, "An internal error occurred, this should not have been called")
+    });
+
+    "over" => (Builtin::Over, 3(2): over);
+
+    "rot" => (Builtin::Rot, 0(0): rot);
+
+    "rotr" => (Builtin::RotRight, 0(0): rotr);
+
+    "and" => (Builtin::LogicalAnd, 1(2): logical_and);
+
+    "or" => (Builtin::LogicalOr, 1(2): logical_or);
 }
 
 fn op_add(_: Scope, left: Value, right: Value) -> Status<Value> {
@@ -167,6 +197,10 @@ fn op_div(_: Scope, left: Value, right: Value) -> Status<Value> {
 
 fn op_mod(_: Scope, left: Value, right: Value) -> Status<Value> {
     left % right
+}
+
+fn op_not(_: Scope, value: Value) -> Status<Value> {
+    Ok(Value::from(!value.as_bool()?))
 }
 
 fn op_pop(scope: Scope) -> Status {
@@ -198,52 +232,74 @@ fn op_dup(scope: Scope) -> Status {
     Ok(())
 }
 
-define_builtins! {
-    "print" => (Builtin::Print, 0(0): |scope: Scope| {
-        let v = scope.borrow_mut().pop()?;
-        println!("{v}");
-        Ok(())
-    });
+fn print(scope: Scope) -> Status {
+    let v = scope.borrow_mut().pop()?;
+    println!("{v}");
+    Ok(())
+}
 
-    "inc" => (Builtin::Inc, 1(1): |_, v| {
-        let n = v.as_num()?;
-        Ok(Value::from(n + 1))
-    });
+fn inc(_: Scope, v: Value) -> Status<Value> {
+    let n = v.as_num()?;
+    Ok(Value::from(n + 1))
+}
 
-    "dec" => (Builtin::Dec, 1(1): |_, v| {
-        let n = v.as_num()?;
-        Ok(Value::from(n - 1))
-    });
+fn dec(_: Scope, v: Value) -> Status<Value> {
+    let n = v.as_num()?;
+    Ok(Value::from(n - 1))
+}
 
-    "def" => (Builtin::Def, 0(2): |scope: Scope| {
-        let mut s = scope.borrow_mut();
-        let name = s.pop_value()?.as_str()?;
-        if !utils::is_one_word(&name) {
-            return night_err!(Runtime, format!("'{name}' is not a valid symbol name."))
-        }
-        let value = s.pop()?;
-        s.def_sym(name, value)
-    });
+fn def(scope: Scope) -> Status {
+    let mut s = scope.borrow_mut();
+    let name = s.pop_value()?.as_str()?;
+    if !utils::is_one_word(&name) {
+        return night_err!(Runtime, format!("'{name}' is not a valid symbol name."));
+    }
+    let value = s.pop()?;
+    s.def_sym(name, value)
+}
 
-    "undef" => (Builtin::Undef, 1(1): |scope, name| {
-        let mut s = scope.borrow_mut();
-        let name = name.as_str()?;
-        if !utils::is_one_word(&name) {
-            return night_err!(Runtime, format!("'${name}' is not a valid symbol name."))
-        }
-        s.undef_sym(name)
-    });
+fn undef(scope: Scope, name: Value) -> Status<StackVal> {
+    let mut s = scope.borrow_mut();
+    let name = name.as_str()?;
+    if !utils::is_one_word(&name) {
+        return night_err!(Runtime, format!("'${name}' is not a valid symbol name."));
+    }
+    s.undef_sym(name)
+}
 
-    "undefr" => (Builtin::UndefReg, 0(1): |scope, name| {
-        let mut s = scope.borrow_mut();
-        let name = name.as_str()?;
-        if !utils::is_one_word(&name) {
-            return night_err!(Runtime, format!("'${name}' is not a valid register name."))
-        }
-        s.undef_reg(name)
-    });
+fn undefr(scope: Scope, name: Value) -> Status {
+    let mut s = scope.borrow_mut();
+    let name = name.as_str()?;
+    if !utils::is_one_word(&name) {
+        return night_err!(Runtime, format!("'${name}' is not a valid register name."));
+    }
+    s.undef_reg(name)
+}
 
-    "loop" => (Builtin::Loop, 0(0): |_| {
-        night_err!(ContextFail, "An internal error occurred, this should not have been called")
-    });
+fn over(scope: Scope) -> Status {
+    let mut s = scope.borrow_mut();
+    let top = s.pop()?;
+    let bottom = s.pop()?;
+    s.push(bottom.clone());
+    s.push(top);
+    s.push(bottom);
+    Ok(())
+}
+
+fn rot(scope: Scope) -> Status {
+    scope.borrow_mut().raw_stack().rotate_left(1);
+    Ok(())
+}
+
+fn rotr(scope: Scope) -> Status {
+    scope.borrow_mut().raw_stack().rotate_right(1);
+    Ok(())
+}
+
+fn logical_and(_: Scope, left: Value, right: Value) -> Status<Value> {
+    Ok(Value::from(left.as_bool()? && right.as_bool()?))
+}
+
+fn logical_or(_: Scope, left: Value, right: Value) -> Status<Value> {
+    Ok(Value::from(left.as_bool()? || right.as_bool()?))
 }

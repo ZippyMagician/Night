@@ -45,6 +45,18 @@ impl Value {
             _ => night_err!(UnsupportedType, "Expected string."),
         }
     }
+
+    pub fn as_bool(self) -> Status<bool> {
+        match self.t {
+            Type::Num(n) if n == 0 => Ok(false),
+            Type::Num(n) if n > 0 => Ok(true),
+            Type::Num(_) => night_err!(
+                UnsupportedType,
+                "To coerce an integer into a boolean, it must be positive."
+            ),
+            _ => night_err!(NaN),
+        }
+    }
 }
 
 // Macro to quickly impl the various arithmetic operations for `Value`
@@ -89,6 +101,14 @@ impl From<i32> for Value {
     fn from(value: i32) -> Self {
         Self {
             t: Type::Num(value),
+        }
+    }
+}
+
+impl From<bool> for Value {
+    fn from(value: bool) -> Self {
+        Self {
+            t: Type::Num(if value { 1 } else { 0 }),
         }
     }
 }

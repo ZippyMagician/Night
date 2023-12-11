@@ -24,6 +24,12 @@ fn main() {
     7 mults
     "#;
 
+    // TODO: Test once more logical ops are implemented
+    /*const TEST: &'static str = r#"
+    -> fib . . 1 eq : 0 = or not { . 1 - fib : 2 - fib + } if
+    4 fib
+    "#;*/
+
     let mut lex = Lexer::new(TEST);
     let tokens = lex.tokenize();
     let mut night = Night::new(TEST, tokens.clone());
