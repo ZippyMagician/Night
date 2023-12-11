@@ -4,6 +4,8 @@
 ## About
 TODO. Currently working on getting the major stuff implemented before I rewrite the readme and work on documentation.
 
+Note for future: Currently there is no way for builtins and operators to efficiently call block arguments. The current solution is to offload their definitions to the actual `Night` struct and leave the definitions in `defs.rs` as internal errors (since they should never be called). It's not like it's any slower to do it this way, I just don't really like it right now, as it seems clunky in some situations. Might be a better way.
+
 - [x] Lexer
 - [x] Basic interpreter
 - [x] Operator structure
@@ -13,14 +15,25 @@ TODO. Currently working on getting the major stuff implemented before I rewrite 
 - [x] Symbol definitions
 - [x] Register definitions
 - [x] Guard statements
-- [ ] Arrays
+- [ ] Fully decide how arrays will work
+- [ ] Implement basic arrays
+- [ ] Implement array support ops
 - [x] Implement operators
-- [ ] Implement builtins
+- [x] Implement basic builtins (poc)
+- [ ] Choose + Implement more useful builtins
+
+For guards, maybe add a way to stop arbitrary blocks executed with the `call` op from using certain guarded values?
+Something like:
+```ruby
+(:private1 :private2 | :public) { ... }
+```
+This also gives more syntactic use for `|`, which currently is only used for const defs.
+If I did do this, I'd have to slightly redesign how guarded registers are stored. Currently they it's just a `HashSet<String>`, which wouldn't properly distinguish between the two types (and also the level they exist in). Maybe add a new instr marker placed after `call` ops pre-execution as a marker? Then have a separate `HashSet` for inaccessible registers. Probably the simplest solution.
 
 Possible ideas
 - Complex number support
 - More math builtins
-- Libraries
+- Imports
 - Lower level operations
 
 ## Basic Syntax
@@ -32,11 +45,11 @@ x x * print
 -> mults2 (:a) :a ! 9 { . $a + } loop
 7 mults
 
--> dip (:dip) : :dip ! ; ? $dip
+-> dip (:top) : :top ! ; ? $top
 -> for (:for_f) {
 	:for_f ! ; . len
 	(:for_r :I) {
-		. head : 1 drop :for_r ! ; :I ! ;
+		. first : 1 drop :for_r ! ; :I ! ;
 		$for_f ? $for_r
 	} loop
 }
