@@ -26,7 +26,7 @@ fn main() {
 
     // TODO: Test once more logical ops are implemented
     /*const TEST: &'static str = r#"
-    -> fib . . 1 eq : 0 = or not { . 1 - fib : 2 - fib + } if
+    -> fib . . 1 eq : 0 = or ~ { . dec fib : 2 - fib + } if
     4 fib
     "#;*/
 
@@ -37,8 +37,8 @@ fn main() {
     println!(
         "{:?}\n---",
         tokens
-            .iter()
-            .map(|(n, _)| n.clone())
+            .into_iter()
+            .map(|(n, _)| n)
             .collect::<Vec<Token>>()
     );
 

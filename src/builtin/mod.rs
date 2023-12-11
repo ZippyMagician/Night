@@ -19,15 +19,15 @@ pub enum Operator {
     /// 3 2 = -- 0
     Eq,
     /// 3 2 != -- 1
-    Neq,
+    NotEq,
     /// 2 2 > -- 0
-    Gt,
+    Greater,
     /// 2 2 >= -- 1
-    Gte,
+    GreaterEq,
     /// 1 2 < -- 1
-    Lt,
+    Less,
     /// 1 2 <= -- 1
-    Lte,
+    LessEq,
     /// 1 ~ -- 0
     Not,
     /// 6 :tmp ! -- 6, [$tmp = 6]
@@ -42,7 +42,7 @@ pub enum Operator {
     Call,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(C)]
 pub enum Builtin {
     /// Pop top value, print to stdout

@@ -126,15 +126,15 @@ define_ops! {
 
     "=" => (Operator::Eq, "eq", 0(0): |_: Scope| Ok(()));
 
-    "!=" => (Operator::Neq, "neq", 0(0): |_: Scope| Ok(()));
+    "!=" => (Operator::NotEq, "neq", 0(0): |_: Scope| Ok(()));
 
-    ">" => (Operator::Gt, "gt", 0(0): |_: Scope| Ok(()));
+    ">" => (Operator::Greater, "gt", 0(0): |_: Scope| Ok(()));
 
-    "<" => (Operator::Lt, "lt", 0(0): |_: Scope| Ok(()));
+    "<" => (Operator::Less, "lt", 0(0): |_: Scope| Ok(()));
 
-    ">=" => (Operator::Gte, "gte", 0(0): |_: Scope| Ok(()));
+    ">=" => (Operator::GreaterEq, "gte", 0(0): |_: Scope| Ok(()));
 
-    "<=" => (Operator::Lte, "lte", 0(0): |_: Scope| Ok(()));
+    "<=" => (Operator::LessEq, "lte", 0(0): |_: Scope| Ok(()));
 
     "~" => (Operator::Not, "not", 1(1): op_not);
 
