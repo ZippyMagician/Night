@@ -36,10 +36,7 @@ fn main() {
 
     println!(
         "{:?}\n---",
-        tokens
-            .into_iter()
-            .map(|(n, _)| n)
-            .collect::<Vec<Token>>()
+        tokens.into_iter().map(|(n, _)| n).collect::<Vec<Token>>()
     );
 
     night.init();
