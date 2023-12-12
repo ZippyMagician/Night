@@ -1,6 +1,6 @@
 use std::error::Error;
 use std::fmt::{self, Display};
-use std::num::ParseIntError;
+use std::num::{ParseIntError, ParseFloatError};
 
 use crate::lexer::Span;
 
@@ -75,6 +75,12 @@ impl Error for NightError {}
 
 impl From<ParseIntError> for NightError {
     fn from(_: ParseIntError) -> Self {
+        NightError::NaN
+    }
+}
+
+impl From<ParseFloatError> for NightError {
+    fn from(_: ParseFloatError) -> Self {
         NightError::NaN
     }
 }

@@ -28,6 +28,7 @@ fn main() {
     const TEST: &'static str = r#"
     -> fib . . 1 eq : 0 = or ~ { . dec fib : 2 - fib + } if
     10 fib
+    5 2. /
     "#;
 
     let mut lex = Lexer::new(TEST);

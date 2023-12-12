@@ -174,6 +174,14 @@ define_builtins! {
 
     "or" => (Builtin::LogicalOr, 1(2): logical_or);
 
+    "floor" => (Builtin::Floor, 1(1): floor);
+
+    "ceil" => (Builtin::Ceil, 1(1): ceil);
+
+    "i32" => (Builtin::CastToInt, 1(1): cast_to_int);
+
+    "f32" => (Builtin::CastToFloat, 1(1): cast_to_float);
+
     "loop" => (Builtin::Loop, 0(0): |_| {
         night_err!(ContextFail, "An internal error occurred, this should not have been called.")
     });
@@ -295,12 +303,12 @@ fn print(scope: Scope) -> Status {
 }
 
 fn inc(_: Scope, v: Value) -> Status<Value> {
-    let n = v.as_num()?;
+    let n = v.as_int()?;
     Ok(Value::from(n + 1))
 }
 
 fn dec(_: Scope, v: Value) -> Status<Value> {
-    let n = v.as_num()?;
+    let n = v.as_int()?;
     Ok(Value::from(n - 1))
 }
 
@@ -358,4 +366,28 @@ fn logical_and(_: Scope, left: Value, right: Value) -> Status<Value> {
 
 fn logical_or(_: Scope, left: Value, right: Value) -> Status<Value> {
     Ok(Value::from(left.as_bool()? || right.as_bool()?))
+}
+
+fn floor(_: Scope, value: Value) -> Status<Value> {
+    if value.is_int() {
+        Ok(value)
+    } else {
+        Ok(Value::from(value.as_float()?.floor()))
+    }
+}
+
+fn ceil(_: Scope, value: Value) -> Status<Value> {
+    if value.is_int() {
+        Ok(value)
+    } else {
+        Ok(Value::from(value.as_float()?.ceil()))
+    }
+}
+
+fn cast_to_int(_: Scope, value: Value) -> Status<Value> {
+    Ok(Value::from(value.as_int()?))
+}
+
+fn cast_to_float(_: Scope, value: Value) -> Status<Value> {
+    Ok(Value::from(value.as_float()?))
 }

@@ -110,7 +110,13 @@ impl<'a> Night<'a> {
     #[inline]
     fn build_instr(&mut self, tok: Token) -> Status {
         match tok {
-            Token::Number(n) => push_instr!(Instr::Push, Value::from(n.parse::<i32>()?), self),
+            Token::Number(n) => {
+                if n.contains('.') {
+                    push_instr!(Instr::Push, Value::from(n.parse::<f32>()?), self)
+                } else {
+                    push_instr!(Instr::Push, Value::from(n.parse::<i32>()?), self)
+                }
+            }
             Token::String(s) => push_instr!(Instr::Push, Value::from(s.to_string()), self),
             Token::Register(s) => push_instr!(Instr::PushSym, s.to_string(), true, self),
             Token::Op(Operator::Call) => self.instrs.push_back(Instr::Call(self.spans.len() - 1)),
@@ -441,7 +447,7 @@ impl<'a> Night<'a> {
     fn exec_builtin_loop(&mut self) -> Status {
         let mut s = self.scope.borrow_mut();
         let def = s.pop()?.as_fn()?;
-        let count = s.pop_value()?.as_num()?;
+        let count = s.pop_value()?.as_int()?;
         drop(s);
         if count < 0 {
             return night_err!(Runtime, "'loop' can only take a positive integer.");

@@ -71,5 +71,13 @@ pub enum Builtin {
     LogicalOr,
     /// Logical and of two values
     LogicalAnd,
+    /// Floor a number into an i32
+    Floor,
+    /// Ceil a number into an i32
+    Ceil,
+    /// Cast a number to an i32
+    CastToInt,
+    /// Cast a number to a f32
+    CastToFloat,
     // TODO: more
 }

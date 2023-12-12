@@ -255,7 +255,14 @@ impl<'a> Lexer<'a> {
 
     fn consume_number(&mut self, start: usize) -> Option<LexTok<'a>> {
         let mut end = start + 1;
-        while self.is_peek_match(char::is_ascii_digit) {
+        let mut found_decimal = false;
+        while let Some(&(_, c)) = self.chars.peek() {
+            if c == '.' && !found_decimal {
+                found_decimal = true;
+            } else if c == '.' && found_decimal || !c.is_ascii_digit() {
+                break;
+            }
+
             self.chars.next();
             end += 1;
         }
