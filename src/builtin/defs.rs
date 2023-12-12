@@ -303,13 +303,11 @@ fn print(scope: Scope) -> Status {
 }
 
 fn inc(_: Scope, v: Value) -> Status<Value> {
-    let n = v.as_int()?;
-    Ok(Value::from(n + 1))
+    v + Value::from(1)
 }
 
 fn dec(_: Scope, v: Value) -> Status<Value> {
-    let n = v.as_int()?;
-    Ok(Value::from(n - 1))
+    v - Value::from(1)
 }
 
 fn def(scope: Scope) -> Status {
