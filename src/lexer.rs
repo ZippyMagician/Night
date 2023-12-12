@@ -3,6 +3,7 @@ use std::iter::Peekable;
 use std::str::CharIndices;
 
 use crate::builtin::{Operator, OP_MAP};
+use crate::utils;
 use crate::utils::error::lex_err;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -180,8 +181,8 @@ impl<'a> Lexer<'a> {
     }
 
     #[inline]
-    fn is_peek_match(&mut self, f: fn(&char) -> bool) -> bool {
-        self.chars.peek().map_or(false, |(_, c)| f(c))
+    fn next_if(&mut self, f: impl FnOnce(char) -> bool) -> Option<(usize, char)> {
+        self.chars.next_if(|&(_, c)| f(c))
     }
 
     /// Entry function for tokenization
@@ -201,15 +202,11 @@ impl<'a> Lexer<'a> {
     #[inline]
     fn consume_token(&mut self) -> Option<LexTok<'a>> {
         let (start, chr) = self.chars.next()?;
-        if chr.is_whitespace() {
-            return self.consume_whitespace(chr, start);
-        } else if chr.is_ascii_punctuation() {
-            return self.maybe_op(chr, start);
-        }
-
         match chr {
             '0'..='9' => self.consume_number(start),
             'a'..='z' | 'A'..='Z' => self.consume_symbol(start),
+            c if c.is_whitespace() => self.consume_whitespace(c, start),
+            c if c.is_ascii_punctuation() => self.maybe_op(c, start),
             _ => {
                 lex_err!("LexError: Unrecognized token."; self.input, start, 1, self.line => self.line)
             }
@@ -217,25 +214,33 @@ impl<'a> Lexer<'a> {
     }
 
     fn maybe_op(&mut self, chr: char, start: usize) -> Option<LexTok<'a>> {
-        let peek = self.chars.peek().map(|&(_, c)| c);
-        match (chr, peek) {
-            ('\'', _) => self.consume_char_lit(start),
-            ('-', Some('-')) => self.skip_comment(),
-            ('-', Some('>')) => {
-                self.chars.next();
-                lex_tok!(Token::Define, self, start, 2, 0)
-            }
-            ('-', Some(c)) if c.is_ascii_digit() => self.consume_number(start),
-            (':', Some(c)) if c == '_' || c.is_ascii_alphanumeric() => self.consume_word(start),
-            ('$', _) => self.consume_register(start),
-            ('"', _) => self.consume_string(start),
-            ('|', _) => lex_tok!(Token::Pipe, self, start, 1, 0),
-            ('[', _) => lex_tok!(Token::OpenBracket, self, start, 1, 0),
-            (']', _) => lex_tok!(Token::CloseBracket, self, start, 1, 0),
-            ('{', _) => lex_tok!(Token::OpenCurly, self, start, 1, 0),
-            ('}', _) => lex_tok!(Token::CloseCurly, self, start, 1, 0),
-            ('(', _) => lex_tok!(Token::OpenParen, self, start, 1, 0),
-            (')', _) => lex_tok!(Token::CloseParen, self, start, 1, 0),
+        if chr == '-' && self.next_if(|c| c == '-').is_some() {
+            return self.skip_comment();
+        } else if chr == '-' && self.next_if(|c| c == '>').is_some() {
+            return lex_tok!(Token::Define, self, start, 2, 0);
+        } else if chr == '-' && self.next_if(|c| c.is_ascii_digit()).is_some() {
+            return self.consume_number(start);
+        // This uses `peek` instead of `next_if` in order to avoid issues with the 1st char of the word being consumed before `calculate_var_bounds` is called.
+        } else if chr == ':'
+            && self
+                .chars
+                .peek()
+                .map_or(false, |&(_, c)| utils::valid_symbol_chr(c))
+        {
+            return self.consume_word(start);
+        }
+
+        match chr {
+            '\'' => self.consume_char_lit(start),
+            '$' => self.consume_register(start),
+            '"' => self.consume_string(start),
+            '|' => lex_tok!(Token::Pipe, self, start, 1, 0),
+            '[' => lex_tok!(Token::OpenBracket, self, start, 1, 0),
+            ']' => lex_tok!(Token::CloseBracket, self, start, 1, 0),
+            '{' => lex_tok!(Token::OpenCurly, self, start, 1, 0),
+            '}' => lex_tok!(Token::CloseCurly, self, start, 1, 0),
+            '(' => lex_tok!(Token::OpenParen, self, start, 1, 0),
+            ')' => lex_tok!(Token::CloseParen, self, start, 1, 0),
             _ if OP_MAP.contains_key(&self.input[start..start + 1]) => self.consume_op(start),
             _ => {
                 lex_err!("LexError: Unrecognized token."; self.input, start, 1, self.line => self.line)
@@ -256,14 +261,11 @@ impl<'a> Lexer<'a> {
     fn consume_number(&mut self, start: usize) -> Option<LexTok<'a>> {
         let mut end = start + 1;
         let mut found_decimal = false;
-        while let Some(&(_, c)) = self.chars.peek() {
-            if c == '.' && !found_decimal {
+        while let Some((_, c)) = self.next_if(|c| c.is_ascii_digit() || c == '.' && !found_decimal)
+        {
+            if c == '.' {
                 found_decimal = true;
-            } else if c == '.' && found_decimal || !c.is_ascii_digit() {
-                break;
             }
-
-            self.chars.next();
             end += 1;
         }
         lex_tok!(Token::Number, start, end, self, start, end - start, 0)
@@ -271,8 +273,7 @@ impl<'a> Lexer<'a> {
 
     fn calculate_var_bounds(&mut self, start: usize) -> (usize, usize) {
         let mut end = start + 1;
-        while self.is_peek_match(|&c| c == '_' || c.is_ascii_alphanumeric()) {
-            self.chars.next();
+        while self.next_if(utils::valid_symbol_chr).is_some() {
             end += 1;
         }
 
@@ -325,15 +326,13 @@ impl<'a> Lexer<'a> {
 
     fn consume_op(&mut self, start: usize) -> Option<LexTok<'a>> {
         let mut end = start + 1;
-        while self.chars.peek().is_some() {
-            if OP_MAP.contains_key(&self.input[start..end + 1]) {
-                end += 1;
-                self.chars.next();
-                continue;
-            }
-
-            break;
+        while self
+            .next_if(|_| OP_MAP.contains_key(&self.input[start..end + 1]))
+            .is_some()
+        {
+            end += 1;
         }
+
         let (_, &op) = OP_MAP.get_entry(&self.input[start..end])?;
         lex_tok!(Token::Op(op), self, start, end - start, 0)
     }
