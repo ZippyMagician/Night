@@ -22,15 +22,30 @@ Note for future: Currently there is no way for builtins and operators to efficie
 - [x] Implement basic builtins (poc)
 - [ ] Choose + Implement more useful builtins
 
-For guards, maybe add a way to stop arbitrary blocks executed with the `call` op from using certain guarded values?
-Something like:
-```ruby
-(:private1 :private2 | :public) { ... }
-```
-This also gives more syntactic use for `|`, which currently is only used for const defs.
-If I did do this, I'd have to slightly redesign how guarded registers are stored. Currently they it's just a `HashSet<String>`, which wouldn't properly distinguish between the two types (and also the level they exist in). Maybe add a new instr marker placed after `call` ops pre-execution as a marker? Then have a separate `HashSet` for inaccessible registers. Probably the simplest solution.
+#### In progress features
+> For guards, maybe add a way to stop arbitrary blocks executed with the `call` op from using certain guarded values?
+> Something like:
+> ```ruby
+> (:private1 :private2 | :public) { ... }
+> ```
+> This also gives more syntactic use for `|`, which currently is only used for const defs.
+> If I did do this, I'd have to slightly redesign how guarded registers are stored. Currently they it's just a `HashSet<String>`, which wouldn't properly distinguish between the two types (and also the level they > exist in). Maybe add a new instr marker placed after `call` ops pre-execution as a marker? Then have a separate `HashSet` for inaccessible registers. Probably the simplest solution.
 
-Possible ideas
+Implemented in a slightly different manner that allows for more choices.
+```hs
+(:private1 :public) {
+	-- ... do things
+	:private1 | ?
+	-- ... do more things
+}
+```
+This will "block" the register *$private1* from being accessed in whatever is called by the `call` op. Once arrays are implemented, something like
+```hs
+[:private1 :private2] | ?
+```
+will work too.
+
+#### Possible future ideas
 - Complex number support
 - More math builtins
 - Imports
@@ -50,7 +65,7 @@ x x * print
 	:for_f ! ; . len
 	(:for_r :I) {
 		. first : 1 drop :for_r ! ; :I ! ;
-		$for_f ? $for_r
+		$for_f [:for_f :for_r] | ? $for_r
 	} loop
 }
 ```
@@ -80,14 +95,13 @@ May change once implemented.
 \$[0-9a-zA-Z][_0-9a-zA-Z]* ⇒ Temp variable
 [a-zA-Z][_0-9a-zA-Z]* ⇒ Variable name
 '{anything} ⇒ Literal character
+\n ⇒ Literal newline is a token, other whitespace ignored/unimportant
 
 # Some builtins more preprocessor-directives
-STACK N fn loop ⇒ STACK fn? fn? ... fn? [N times]
 -> x   y ⇒ {y} :x def
 -> x | y ⇒   y :x def
+:x | <instr>       ⇒ Block register x from being access for the duration of the next instr
+[:x :y] | <instr>  ⇒ Block register[s] x & y from being accessed for the duration of the next instr
+-> x (:word :list) { y } ⇒ Specify temp words to unassign after. Acts as guard on registers.
 -- ⇒ comment
-
-# Other
-\n ⇒ Literal newline is a token, other whitespace ignored/unimportant
--> x (:word :list) { y }-- def ⇒ Specify temp words to unassign after. Acts as guard.
 ```

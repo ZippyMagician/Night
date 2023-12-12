@@ -31,7 +31,7 @@ impl StackVal {
 impl Display for StackVal {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Function(def) => write!(f, "<function> {:?}", def.instrs),
+            Self::Function(def) => write!(f, "<function>: {:?}", def.instrs),
             Self::Value(v) => write!(f, "{v}"),
         }
     }
@@ -70,6 +70,7 @@ impl ToString for SymbolType {
 pub struct ScopeInternal {
     stack: Vec<StackVal>,
     guard: HashSet<String>,
+    block: HashSet<String>,
     env: HashMap<SymbolType, StackVal>,
 }
 
@@ -78,6 +79,7 @@ impl ScopeInternal {
         Self {
             stack: Vec::new(),
             guard: HashSet::new(),
+            block: HashSet::new(),
             env: HashMap::new(),
         }
     }
@@ -87,7 +89,7 @@ impl ScopeInternal {
             Ok(())
         } else {
             night_err!(
-                Syntax,
+                Runtime,
                 format!("Attempted to guard register '${g}' when it was already guarded.")
             )
         }
@@ -97,6 +99,26 @@ impl ScopeInternal {
         self.guard.remove(&g);
         // `GuardEnd` always follows `Guard`, so the register will always be defined
         let _ = self.undef_reg(g);
+    }
+
+    pub fn add_block(&mut self, g: String) -> Status {
+        if !self.guard.contains(&g) {
+            night_err!(
+                Runtime,
+                format!("Cannot block register '${g}' when it is not guarded.")
+            )
+        } else if self.block.insert(g.clone()) {
+            Ok(())
+        } else {
+            night_err!(
+                Runtime,
+                format!("Attempted to block register '${g}' when it was already blocked.")
+            )
+        }
+    }
+
+    pub fn rem_block(&mut self, g: String) {
+        self.block.remove(&g);
     }
 
     pub fn pop(&mut self) -> Status<StackVal> {
@@ -136,17 +158,14 @@ impl ScopeInternal {
         }
     }
 
-    pub fn def_reg(&mut self, reg: String, s: StackVal) -> Status<StackVal> {
-        let guarded = self.guard.contains(&reg);
-        let reg = SymbolType::Register(reg);
+    pub fn def_reg(&mut self, name: String, s: StackVal) -> Status<StackVal> {
+        let guarded = self.guard.contains(&name);
+        let reg = SymbolType::Register(name.clone());
         if self.env.contains_key(&reg) {
             if guarded {
                 return night_err!(
                     Runtime,
-                    format!(
-                        "Register '{}' is guarded, cannot redefine.",
-                        reg.to_string()
-                    )
+                    format!("Register '${name}' is guarded, cannot redefine.")
                 );
             }
             self.env.remove(&reg);
@@ -167,10 +186,7 @@ impl ScopeInternal {
         if self.guard.contains(&reg) {
             return night_err!(
                 Runtime,
-                format!(
-                    "Register '{}' is guarded, cannot undefine.",
-                    reg.to_string()
-                )
+                format!("Register '${reg}' is guarded, cannot undefine.")
             );
         }
         let reg = SymbolType::Register(reg);
@@ -188,6 +204,13 @@ impl ScopeInternal {
     }
 
     pub fn get_reg(&self, reg: String) -> Status<&StackVal> {
+        if self.block.contains(&reg) {
+            return night_err!(
+                Runtime,
+                format!("Register '${reg}' is blocked, cannot access.")
+            );
+        }
+
         let reg = SymbolType::Register(reg);
         self.env
             .get(&reg)
@@ -204,7 +227,7 @@ impl Display for ScopeInternal {
         for val in &self.stack {
             match val {
                 StackVal::Value(v) => writeln!(f, "{v}")?,
-                StackVal::Function(_) => writeln!(f, "<Function>")?,
+                StackVal::Function(_) => writeln!(f, "<function>")?,
             }
         }
 
@@ -217,6 +240,7 @@ impl From<Vec<StackVal>> for ScopeInternal {
         Self {
             stack: value,
             guard: HashSet::new(),
+            block: HashSet::new(),
             env: HashMap::new(),
         }
     }

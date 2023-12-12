@@ -22,6 +22,8 @@ pub enum Instr {
     Call(usize),
     Guard(Vec<String>, usize),
     GuardEnd(Vec<String>, usize),
+    Block(Vec<String>, usize),
+    Unblock(Vec<String>, usize),
 }
 
 impl Instr {
@@ -35,6 +37,8 @@ impl Instr {
             Instr::Call(s) => *s,
             Instr::Guard(_, s) => *s,
             Instr::GuardEnd(_, s) => *s,
+            Instr::Block(_, s) => *s,
+            Instr::Unblock(_, s) => *s,
         }
     }
 }
@@ -137,7 +141,20 @@ impl<'a> Night<'a> {
             Token::Define => self.parse_define()?,
             Token::Symbol(_) => self.instrs.push_back(self.maybe_builtin(tok)),
             Token::Newline | Token::EOF => {} // skip
-            Token::Pipe => return night_err!(Syntax, "Invalid usage of the 'Const' identifier."),
+            Token::Pipe => {
+                let ident = self.instrs.pop_back().ok_or(NightError::Syntax(
+                    "Register block statement requires a preceeding literal.".to_string(),
+                ))?;
+                match ident {
+                    Instr::Push(value, i) if value.is_str() => {
+                        let name = value.as_str()?;
+                        let span = Span::between(&self.spans[i], &self.spans[self.spans.len() - 1]);
+                        self.spans.push(span);
+                        push_instr!(Instr::Block, vec![name], self)
+                    }
+                    _ => return night_err!(Syntax, "Register block statement requires a valid preceeding literal [word/string/array of strings]."),
+                }
+            }
             _ => return night_err!(Unimplemented, format!("Token '{tok:?}'")),
         }
 
@@ -434,6 +451,30 @@ impl<'a> Night<'a> {
                     s.rem_guard(g);
                 }
             }
+            Block(guard, i) => {
+                if self.instrs.is_empty() {
+                    error::error(
+                        NightError::Runtime(
+                            "Block expression must preceed some operation.".to_string(),
+                        ),
+                        self.spans[i].clone(),
+                    );
+                }
+
+                self.instrs.insert(1, Instr::Unblock(guard.clone(), i));
+                let mut s = self.scope.borrow_mut();
+                for g in guard {
+                    if let Err(e) = s.add_block(g) {
+                        error::error(e, self.spans[i].clone());
+                    }
+                }
+            }
+            Unblock(guard, _) => {
+                let mut s = self.scope.borrow_mut();
+                for g in guard {
+                    s.rem_block(g);
+                }
+            }
         }
     }
 
@@ -483,6 +524,8 @@ impl Debug for Instr {
             Instr::Internal(b, _) => write!(f, "{b:?}"),
             Instr::Guard(syms, _) => write!(f, "<guard: {syms:?}>"),
             Instr::GuardEnd(syms, _) => write!(f, "<guard_end: {syms:?}>"),
+            Instr::Block(syms, _) => write!(f, "<block: {syms:?}>"),
+            Instr::Unblock(syms, _) => write!(f, "<unblock: {syms:?}>"),
         }
     }
 }

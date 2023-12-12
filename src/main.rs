@@ -29,6 +29,8 @@ fn main() {
     -> fib . . 1 = : 0 = or ~ { . dec fib : 2 - fib + } if
     10 fib
     1 3. /
+    -> dip (:top) : :top ! ; :top | ? $top
+    3 6 {inc} dip
     "#;
 
     let mut lex = Lexer::new(TEST);
