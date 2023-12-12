@@ -124,17 +124,17 @@ define_ops! {
 
     "%" => (Operator::Mod, "mod", 1(2): op_mod);
 
-    "=" => (Operator::Eq, "eq", 0(0): |_: Scope| Ok(()));
+    "=" => (Operator::Eq, "eq", 1(2): op_eq);
 
-    "!=" => (Operator::NotEq, "neq", 0(0): |_: Scope| Ok(()));
+    "!=" => (Operator::NotEq, "neq", 1(2): op_neq);
 
-    ">" => (Operator::Greater, "gt", 0(0): |_: Scope| Ok(()));
+    ">" => (Operator::Greater, "gt", 1(2): op_gt);
 
-    "<" => (Operator::Less, "lt", 0(0): |_: Scope| Ok(()));
+    "<" => (Operator::Less, "lt", 1(2): op_lt);
 
-    ">=" => (Operator::GreaterEq, "gte", 0(0): |_: Scope| Ok(()));
+    ">=" => (Operator::GreaterEq, "gte", 1(2): op_gte);
 
-    "<=" => (Operator::LessEq, "lte", 0(0): |_: Scope| Ok(()));
+    "<=" => (Operator::LessEq, "lte", 1(2): op_lte);
 
     "~" => (Operator::Not, "not", 1(1): op_not);
 
@@ -197,6 +197,58 @@ fn op_div(_: Scope, left: Value, right: Value) -> Status<Value> {
 
 fn op_mod(_: Scope, left: Value, right: Value) -> Status<Value> {
     left % right
+}
+
+fn op_eq(_: Scope, left: Value, right: Value) -> Status<Value> {
+    Ok(Value::from(left == right))
+}
+
+fn op_neq(_: Scope, left: Value, right: Value) -> Status<Value> {
+    Ok(Value::from(left != right))
+}
+
+fn op_gt(_: Scope, left: Value, right: Value) -> Status<Value> {
+    if Value::types_match(&left, &right) {
+        Ok(Value::from(left > right))
+    } else {
+        night_err!(
+            UnsupportedType,
+            format!("Cannot order '{left}' and '{right}' as their types do not match.")
+        )
+    }
+}
+
+fn op_lt(_: Scope, left: Value, right: Value) -> Status<Value> {
+    if Value::types_match(&left, &right) {
+        Ok(Value::from(left < right))
+    } else {
+        night_err!(
+            UnsupportedType,
+            format!("Cannot order '{left}' and '{right}' as their types do not match.")
+        )
+    }
+}
+
+fn op_gte(_: Scope, left: Value, right: Value) -> Status<Value> {
+    if Value::types_match(&left, &right) {
+        Ok(Value::from(left >= right))
+    } else {
+        night_err!(
+            UnsupportedType,
+            format!("Cannot order '{left}' and '{right}' as their types do not match.")
+        )
+    }
+}
+
+fn op_lte(_: Scope, left: Value, right: Value) -> Status<Value> {
+    if Value::types_match(&left, &right) {
+        Ok(Value::from(left <= right))
+    } else {
+        night_err!(
+            UnsupportedType,
+            format!("Cannot order '{left}' and '{right}' as their types do not match.")
+        )
+    }
 }
 
 fn op_not(_: Scope, value: Value) -> Status<Value> {

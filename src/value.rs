@@ -17,6 +17,14 @@ pub struct Value {
 
 impl Value {
     #[inline]
+    pub fn types_match(left: &Self, right: &Self) -> bool {
+        match &left.t {
+            Type::Num(_) => matches!(right.t, Type::Num(_)),
+            Type::Str(_) => matches!(right.t, Type::Str(_)),
+        }
+    }
+
+    #[inline]
     pub fn is_num(&self) -> bool {
         match self.t {
             Type::Num(_) => true,
@@ -24,6 +32,7 @@ impl Value {
         }
     }
 
+    #[inline]
     pub fn as_num(self) -> Status<i32> {
         match self.t {
             Type::Num(n) => Ok(n),
@@ -39,6 +48,7 @@ impl Value {
         }
     }
 
+    #[inline]
     pub fn as_str(self) -> Status<String> {
         match self.t {
             Type::Str(s) => Ok(s),
@@ -46,6 +56,7 @@ impl Value {
         }
     }
 
+    #[inline]
     pub fn as_bool(self) -> Status<bool> {
         match self.t {
             Type::Num(n) if n == 0 => Ok(false),
@@ -86,6 +97,36 @@ impl_arith_ops! {
     Mul, mul, "mul", [l, r] {l * r};
     Div, div, "div", [l, r] {l / r};
     Rem, rem, "mod", [l, r] {l % r};
+}
+
+impl PartialEq for Value {
+    fn eq(&self, other: &Self) -> bool {
+        match &self.t {
+            Type::Num(left) => match &other.t {
+                Type::Num(right) => left == right,
+                _ => false,
+            },
+            Type::Str(left) => match &other.t {
+                Type::Str(right) => left == right,
+                _ => false,
+            },
+        }
+    }
+}
+
+impl PartialOrd for Value {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        match &self.t {
+            Type::Num(left) => match other.t {
+                Type::Num(right) => left.partial_cmp(&right),
+                _ => None,
+            },
+            Type::Str(left) => match &other.t {
+                Type::Str(right) => left.partial_cmp(&right),
+                _ => None,
+            },
+        }
+    }
 }
 
 impl Display for Value {
