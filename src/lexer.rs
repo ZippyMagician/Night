@@ -321,6 +321,7 @@ impl<'a> Lexer<'a> {
         while self.chars.peek().is_some() {
             if OP_MAP.contains_key(&self.input[start..end + 1]) {
                 end += 1;
+                self.chars.next();
                 continue;
             }
 
