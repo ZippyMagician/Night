@@ -404,6 +404,11 @@ impl<'a> Night<'a> {
                     error::error(e, self.spans[i].clone());
                 }
             }
+            Internal(Builtin::If, i) => {
+                if let Err(e) = self.exec_builtin_if() {
+                    error::error(e, self.spans[i].clone());
+                }
+            }
             Internal(b, i) => {
                 if let Err(e) = b.call(self.scope.clone()) {
                     error::error(e, self.spans[i].clone());
@@ -428,16 +433,8 @@ impl<'a> Night<'a> {
 
     fn exec_op_call(&mut self) -> Status {
         let scope = self.scope.clone();
-        let top = scope.borrow_mut().pop()?;
-        if let StackVal::Function(f) = top {
-            self.exec_fn(f.instrs)
-        } else {
-            return night_err!(
-                UnsupportedType,
-                "Expected a function on the top of the stack."
-            );
-        }
-
+        let def = scope.borrow_mut().pop()?.as_fn()?;
+        self.exec_fn(def.instrs);
         Ok(())
     }
 
@@ -452,6 +449,17 @@ impl<'a> Night<'a> {
 
         for _ in 0..count {
             self.exec_fn(def.instrs.clone());
+        }
+        Ok(())
+    }
+
+    fn exec_builtin_if(&mut self) -> Status {
+        let mut s = self.scope.borrow_mut();
+        let def = s.pop()?.as_fn()?;
+        let condition = s.pop_value()?.as_bool()?;
+        drop(s);
+        if condition {
+            self.exec_fn(def.instrs);
         }
         Ok(())
     }

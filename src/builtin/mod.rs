@@ -59,6 +59,8 @@ pub enum Builtin {
     UndefReg,
     /// n <function> loop -> call function n times
     Loop,
+    /// cond <function> if -> call function if cond is truthy
+    If,
     /// over ( a b -- a b a )
     Over,
     /// rot ( a b c -- b c a )

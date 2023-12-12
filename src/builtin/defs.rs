@@ -147,7 +147,7 @@ define_ops! {
     "." => (Operator::Dup, "dup", 2(1): op_dup);
 
     "?" => (Operator::Call, "call", 0(0): |_: Scope| {
-        night_err!(ContextFail, "An internal error occurred, this should not have been called")
+        night_err!(ContextFail, "An internal error occurred, this should not have been called.")
     });
 }
 
@@ -164,10 +164,6 @@ define_builtins! {
 
     "undefr" => (Builtin::UndefReg, 0(1): undefr);
 
-    "loop" => (Builtin::Loop, 0(0): |_| {
-        night_err!(ContextFail, "An internal error occurred, this should not have been called")
-    });
-
     "over" => (Builtin::Over, 3(2): over);
 
     "rot" => (Builtin::Rot, 0(0): rot);
@@ -177,6 +173,14 @@ define_builtins! {
     "and" => (Builtin::LogicalAnd, 1(2): logical_and);
 
     "or" => (Builtin::LogicalOr, 1(2): logical_or);
+
+    "loop" => (Builtin::Loop, 0(0): |_| {
+        night_err!(ContextFail, "An internal error occurred, this should not have been called.")
+    });
+
+    "if" => (Builtin::If, 0(0): |_| {
+        night_err!(ContextFail, "An internal error occurred, this should not have been called.")
+    });
 }
 
 fn op_add(_: Scope, left: Value, right: Value) -> Status<Value> {

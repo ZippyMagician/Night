@@ -16,19 +16,19 @@ fn main() {
         value double do_stuff
     "#;*/
 
-    const TEST: &'static str = r#"
+    /*const TEST: &'static str = r#"
     -> dip (:dip) : :dip ! ; ? $dip
     3 6 {1 +} dip
     :dip undef ;
     -> mults (:a) :a ! 9 {. $a +} loop
     7 mults
-    "#;
+    "#;*/
 
     // TODO: Test once more logical ops are implemented
-    /*const TEST: &'static str = r#"
+    const TEST: &'static str = r#"
     -> fib . . 1 eq : 0 = or ~ { . dec fib : 2 - fib + } if
-    4 fib
-    "#;*/
+    10 fib
+    "#;
 
     let mut lex = Lexer::new(TEST);
     let tokens = lex.tokenize();
