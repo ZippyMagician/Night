@@ -26,9 +26,9 @@ fn main() {
 
     // TODO: Test once more logical ops are implemented
     const TEST: &'static str = r#"
-    -> fib . . 1 eq : 0 = or ~ { . dec fib : 2 - fib + } if
+    -> fib . . 1 = : 0 = or ~ { . dec fib : 2 - fib + } if
     10 fib
-    5 2. /
+    1 3. /
     "#;
 
     let mut lex = Lexer::new(TEST);

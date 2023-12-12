@@ -180,7 +180,13 @@ impl Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self.t {
             Type::Int(l) => write!(f, "{l}"),
-            Type::Float(l) => write!(f, "{l}"),
+            Type::Float(l) => {
+                if l.fract() == 0. {
+                    write!(f, "{l:.1}")
+                } else {
+                    write!(f, "{l}")
+                }
+            }
             Type::Str(s) => write!(f, "\"{s}\""),
         }
     }

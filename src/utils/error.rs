@@ -1,6 +1,6 @@
 use std::error::Error;
 use std::fmt::{self, Display};
-use std::num::{ParseIntError, ParseFloatError};
+use std::num::{ParseFloatError, ParseIntError};
 
 use crate::lexer::Span;
 
