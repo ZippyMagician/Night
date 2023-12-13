@@ -8,12 +8,6 @@ pub trait InlineFunction {
     fn call(&self, scope: Scope) -> Status;
 }
 
-impl InlineFunction for fn(Scope) -> Status {
-    fn call(&self, scope: Scope) -> Status {
-        self(scope)
-    }
-}
-
 #[derive(Clone, Debug)]
 pub struct BiFunction {
     pub instrs: Vec<Instr>,

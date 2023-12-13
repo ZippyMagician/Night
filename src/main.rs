@@ -1,5 +1,6 @@
 use night::interpreter::Night;
 use night::lexer::{Lexer, Token};
+use night::utils;
 
 fn main() {
     // Simulate execution of a program for testing
@@ -29,7 +30,6 @@ fn main() {
     -> fib . . 1 = : 0 = or ~ { . dec fib : 2 - fib + } if
     10 fib
     1 3.5 /
-    -> dip (:top) : :top ! ; :top | ? $top
     3 6 {inc} dip
     :test "this is a string" 'a :b:c
     "#;
@@ -37,6 +37,13 @@ fn main() {
     let mut lex = Lexer::new(TEST);
     let tokens = lex.tokenize();
     let mut night = Night::new(TEST, tokens.clone());
+
+    utils::define_fn(
+        &mut night,
+        r#"
+        -> dip (:top) : :top ! ; :top | ? $top
+        "#,
+    );
 
     println!(
         "{:?}\n---",

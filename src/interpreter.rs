@@ -5,10 +5,10 @@ use std::rc::Rc;
 use std::vec::IntoIter;
 
 use crate::builtin::{Builtin, Operator, BUILTIN_MAP};
-use crate::lexer::{LexTok, Span, Token};
+use crate::lexer::{LexTok, Token};
 use crate::scope::{Scope, ScopeInternal, StackVal};
 use crate::utils;
-use crate::utils::error::{self, night_err, NightError, Status};
+use crate::utils::error::{self, night_err, NightError, Span, Status};
 use crate::utils::function::{BiFunction, InlineFunction};
 use crate::value::Value;
 
@@ -24,6 +24,7 @@ pub enum Instr {
     GuardEnd(Vec<String>, usize),
     Block(Vec<String>, usize),
     Unblock(Vec<String>, usize),
+    EndCallback,
 }
 
 impl Instr {
@@ -39,6 +40,7 @@ impl Instr {
             Instr::GuardEnd(_, s) => *s,
             Instr::Block(_, s) => *s,
             Instr::Unblock(_, s) => *s,
+            Instr::EndCallback => usize::MAX,
         }
     }
 }
@@ -51,6 +53,7 @@ pub struct Night<'a> {
     // It's easier to use a deque, since I can use a while `pop_back` and then easily modify in between iterations
     instrs: VecDeque<Instr>,
     scope: Scope,
+    callback: Vec<usize>,
 }
 
 macro_rules! push_instr {
@@ -75,6 +78,7 @@ impl<'a> Night<'a> {
             spans: vec![],
             instrs: VecDeque::new(),
             scope: Rc::new(RefCell::new(ScopeInternal::create())),
+            callback: vec![],
         }
     }
 
@@ -85,6 +89,7 @@ impl<'a> Night<'a> {
             spans: Vec::new(),
             instrs: instrs.into(),
             scope,
+            callback: vec![],
         }
     }
 
@@ -95,11 +100,20 @@ impl<'a> Night<'a> {
             spans: self.spans.clone(),
             instrs: instrs.into(),
             scope: Rc::new(RefCell::new(self.scope.borrow().to_owned().clone())),
+            callback: vec![],
         }
     }
 
     pub fn get_scope(&self) -> Scope {
         self.scope.clone()
+    }
+
+    pub fn inject_code(&mut self, tokens: Vec<LexTok<'a>>) {
+        let mut tokens = tokens.into_iter();
+        std::mem::swap(&mut self.tokens, &mut tokens);
+        self.init();
+        self.exec();
+        self.tokens = tokens;
     }
 
     pub fn init(&mut self) {
@@ -369,80 +383,64 @@ impl<'a> Night<'a> {
 
     #[inline]
     pub fn exec(&mut self) {
-        // Could directly iterate, but as of now I'm leaving it as this in case it's useful in the future.
         while let Some(instr) = self.instrs.pop_front() {
-            self.exec_instr(instr);
+            let span = instr.get_span();
+            if let Err(e) = self.exec_instr(instr) {
+                // If there is an existing trace, print that too
+                if !self.callback.is_empty() {
+                    let trace = self
+                        .callback
+                        .iter()
+                        .rev()
+                        .map(|&i| self.spans[i].clone())
+                        .collect();
+                    error::error_with_trace(e, self.spans[span].clone(), trace);
+                } else {
+                    error::error(e, self.spans[span].clone());
+                }
+            }
         }
     }
 
     // Unroll the loop to avoid excessive recursion
     #[inline]
-    pub fn exec_fn(&mut self, def: Vec<Instr>) {
+    pub fn exec_fn(&mut self, def: Vec<Instr>, from: usize) {
+        self.callback.push(from);
+        self.instrs.push_front(Instr::EndCallback);
         for instr in def.into_iter().rev() {
-            // self.exec_instr(instr)
             self.instrs.push_front(instr);
         }
     }
 
     #[inline]
-    pub fn exec_instr(&mut self, instr: Instr) {
+    pub fn exec_instr(&mut self, instr: Instr) -> Status {
         use Instr::*;
 
         match instr {
             Push(v, _) => self.scope.borrow_mut().push_value(v),
             // When a symbol is defined as a function, it is executed in place
             PushSym(v, false, i) => {
-                let definition = match self.scope.borrow().get_sym(v) {
-                    Ok(inner) => inner.clone(),
-                    Err(e) => error::error(e, self.spans[i].clone()),
-                };
-
+                let definition = self.scope.borrow().get_sym(v).cloned()?;
                 match definition {
                     StackVal::Value(v) => self.scope.borrow_mut().push_value(v),
-                    StackVal::Function(f) => self.exec_fn(f.instrs),
+                    StackVal::Function(f) => self.exec_fn(f.instrs, i),
                 }
             }
-            PushSym(v, true, i) => {
+            PushSym(v, true, _) => {
                 let mut s = self.scope.borrow_mut();
-                let value = match s.get_reg(v) {
-                    Ok(inner) => inner.clone(),
-                    Err(e) => error::error(e, self.spans[i].clone()),
-                };
-
+                let value = s.get_reg(v).cloned()?;
                 s.push(value)
             }
             PushFunc(f, _) => self.scope.borrow_mut().push(StackVal::Function(f)),
-            Call(i) => {
-                if let Err(e) = self.exec_op_call() {
-                    error::error(e, self.spans[i].clone());
-                }
-            }
-            Op(o, i) => {
-                if let Err(e) = o.call(self.scope.clone()) {
-                    error::error(e, self.spans[i].clone());
-                }
-            }
-            Internal(Builtin::Loop, i) => {
-                if let Err(e) = self.exec_builtin_loop() {
-                    error::error(e, self.spans[i].clone());
-                }
-            }
-            Internal(Builtin::If, i) => {
-                if let Err(e) = self.exec_builtin_if() {
-                    error::error(e, self.spans[i].clone());
-                }
-            }
-            Internal(b, i) => {
-                if let Err(e) = b.call(self.scope.clone()) {
-                    error::error(e, self.spans[i].clone());
-                }
-            }
-            Guard(guard, i) => {
+            Call(i) => self.exec_op_call(i)?,
+            Op(o, _) => o.call(self.scope.clone())?,
+            Internal(Builtin::Loop, i) => self.exec_builtin_loop(i)?,
+            Internal(Builtin::If, i) => self.exec_builtin_if(i)?,
+            Internal(b, _) => b.call(self.scope.clone())?,
+            Guard(guard, _) => {
                 let mut s = self.scope.borrow_mut();
                 for g in guard {
-                    if let Err(e) = s.add_guard(g) {
-                        error::error(e, self.spans[i].clone());
-                    }
+                    s.add_guard(g)?
                 }
             }
             GuardEnd(guard, _) => {
@@ -453,20 +451,12 @@ impl<'a> Night<'a> {
             }
             Block(guard, i) => {
                 if self.instrs.is_empty() {
-                    error::error(
-                        NightError::Runtime(
-                            "Block expression must preceed some operation.".to_string(),
-                        ),
-                        self.spans[i].clone(),
-                    );
+                    return night_err!(Runtime, "Block expression must preceed some operation.");
                 }
-
                 self.instrs.insert(1, Instr::Unblock(guard.clone(), i));
                 let mut s = self.scope.borrow_mut();
                 for g in guard {
-                    if let Err(e) = s.add_block(g) {
-                        error::error(e, self.spans[i].clone());
-                    }
+                    s.add_block(g)?
                 }
             }
             Unblock(guard, _) => {
@@ -475,17 +465,22 @@ impl<'a> Night<'a> {
                     s.rem_block(g);
                 }
             }
+            EndCallback => {
+                self.callback.pop();
+            }
         }
-    }
 
-    fn exec_op_call(&mut self) -> Status {
-        let scope = self.scope.clone();
-        let def = scope.borrow_mut().pop()?.as_fn()?;
-        self.exec_fn(def.instrs);
         Ok(())
     }
 
-    fn exec_builtin_loop(&mut self) -> Status {
+    fn exec_op_call(&mut self, from: usize) -> Status {
+        let scope = self.scope.clone();
+        let def = scope.borrow_mut().pop()?.as_fn()?;
+        self.exec_fn(def.instrs, from);
+        Ok(())
+    }
+
+    fn exec_builtin_loop(&mut self, from: usize) -> Status {
         let mut s = self.scope.borrow_mut();
         let def = s.pop()?.as_fn()?;
         let count = s.pop_value()?.as_int()?;
@@ -495,18 +490,18 @@ impl<'a> Night<'a> {
         }
 
         for _ in 0..count {
-            self.exec_fn(def.instrs.clone());
+            self.exec_fn(def.instrs.clone(), from);
         }
         Ok(())
     }
 
-    fn exec_builtin_if(&mut self) -> Status {
+    fn exec_builtin_if(&mut self, from: usize) -> Status {
         let mut s = self.scope.borrow_mut();
         let def = s.pop()?.as_fn()?;
         let condition = s.pop_value()?.as_bool()?;
         drop(s);
         if condition {
-            self.exec_fn(def.instrs);
+            self.exec_fn(def.instrs, from);
         }
         Ok(())
     }
@@ -526,6 +521,7 @@ impl Debug for Instr {
             Instr::GuardEnd(syms, _) => write!(f, "<guard_end: {syms:?}>"),
             Instr::Block(syms, _) => write!(f, "<block: {syms:?}>"),
             Instr::Unblock(syms, _) => write!(f, "<unblock: {syms:?}>"),
+            Instr::EndCallback => unreachable!(),
         }
     }
 }

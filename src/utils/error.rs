@@ -2,14 +2,123 @@ use std::error::Error;
 use std::fmt::{self, Display};
 use std::num::{ParseFloatError, ParseIntError};
 
-use crate::lexer::Span;
+#[derive(Clone, Debug)]
+pub struct Span<'a> {
+    code: &'a str,
+    start: usize,
+    len: usize,
+    line_start: usize,
+    line_end: usize,
+}
+
+impl<'a> Span<'a> {
+    pub fn empty() -> Self {
+        Self {
+            code: "",
+            start: 0,
+            len: 0,
+            line_start: 0,
+            line_end: 0,
+        }
+    }
+
+    pub fn span(
+        code: &'a str,
+        start: usize,
+        len: usize,
+        line_start: usize,
+        line_end: usize,
+    ) -> Self {
+        Self {
+            code,
+            start,
+            len,
+            line_start,
+            line_end,
+        }
+    }
+
+    pub fn between(left: &Span<'a>, right: &Span<'a>) -> Self {
+        Self {
+            code: left.code,
+            start: left.start,
+            len: (left.start + left.len).abs_diff(right.start + right.len) + 1,
+            line_start: std::cmp::min(left.line_start, right.line_start),
+            line_end: std::cmp::max(left.line_end, right.line_end),
+        }
+    }
+
+    fn fmt_line(&self, line: usize) -> String {
+        format!("{line:>7}| {}", self.code.lines().nth(line).unwrap().trim())
+    }
+
+    fn fmt_arrow(&self, on_start: bool, start: usize, len: usize) -> String {
+        let l = self
+            .code
+            .lines()
+            .nth(if on_start {
+                self.line_start
+            } else {
+                self.line_end
+            })
+            .unwrap();
+        let diff = l.len() - l.trim_start().len();
+
+        let mut buf = String::with_capacity(start + len - diff + 9);
+        buf.push_str("         ");
+        for i in 0..(start + len - diff) {
+            if i < start - diff {
+                buf.push(' ');
+            } else {
+                buf.push('_');
+            }
+        }
+        format!("{buf} <--")
+    }
+
+    fn get_index(&self) -> (usize, usize) {
+        let offset: usize = self.code.lines().take(self.line_start).map(str::len).sum();
+        let left = self.start - offset - self.line_start;
+
+        let right;
+        if self.line_start == self.line_end {
+            right = left + self.len;
+        } else {
+            let offset: usize = self.code.lines().take(self.line_end).map(str::len).sum();
+            right = self.start + self.len - offset - self.line_end;
+        }
+
+        (left, right)
+    }
+}
+
+impl<'a> Display for Span<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let (lefti, righti) = self.get_index();
+        writeln!(
+            f,
+            "[({}:{}) => ({}:{})]:",
+            self.line_start, lefti, self.line_end, righti
+        )?;
+
+        if self.line_start == self.line_end {
+            writeln!(f, "{}", self.fmt_line(self.line_start))?;
+            writeln!(f, "{} Here.", self.fmt_arrow(true, lefti, self.len))
+        } else {
+            writeln!(f, "{}", self.fmt_line(self.line_start))?;
+            writeln!(f, "{} From here...", self.fmt_arrow(true, lefti, 1))?;
+            writeln!(f, "{}", self.fmt_line(self.line_end))?;
+            writeln!(f, "{} ...to here.", self.fmt_arrow(false, righti, 1))
+        }
+    }
+}
 
 // Shorthand macro for calling crate::utils::error::error, used in `lexer.js`
 macro_rules! lex_err {
     ($msg:expr ; $code:expr, $start:expr, $len:expr, $line_start:expr => $line_end:expr) => {
         crate::utils::error::error(
             $msg,
-            crate::lexer::Span::span($code, $start, $len, $line_start, $line_end),
+            crate::utils::error::Span::span($code, $start, $len, $line_start, $line_end),
         )
     };
 }
@@ -17,8 +126,17 @@ macro_rules! lex_err {
 pub(crate) use lex_err;
 
 pub fn error(msg: impl Display, span: Span<'_>) -> ! {
-    println!("{msg} @ {span}");
+    println!("{msg} {span}");
     std::process::exit(-1)
+}
+
+pub fn error_with_trace(msg: impl Display, span: Span<'_>, trace: Vec<Span<'_>>) -> ! {
+    println!("{msg} {span}");
+    for s in trace {
+        print!("Called from {s}");
+    }
+
+    std::process::exit(-1);
 }
 
 #[derive(Clone, Debug)]
