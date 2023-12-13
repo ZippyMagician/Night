@@ -160,10 +160,8 @@ impl<'a> Night<'a> {
                     "Register block statement requires a preceeding literal.".to_string(),
                 ))?;
                 match ident {
-                    Instr::Push(value, i) if value.is_str() => {
+                    Instr::Push(value, _) if value.is_str() => {
                         let name = value.as_str()?;
-                        let span = Span::between(&self.spans[i], &self.spans[self.spans.len() - 1]);
-                        self.spans.push(span);
                         push_instr!(Instr::Block, vec![name], self)
                     }
                     _ => return night_err!(Syntax, "Register block statement requires a valid preceeding literal [word/string/array of strings]."),
@@ -440,13 +438,13 @@ impl<'a> Night<'a> {
             Guard(guard, _) => {
                 let mut s = self.scope.borrow_mut();
                 for g in guard {
-                    s.add_guard(g)?
+                    s.add_guard(g)?;
                 }
             }
             GuardEnd(guard, _) => {
                 let mut s = self.scope.borrow_mut();
                 for g in guard {
-                    s.rem_guard(g);
+                    s.rem_guard(g)?;
                 }
             }
             Block(guard, i) => {

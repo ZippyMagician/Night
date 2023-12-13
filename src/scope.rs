@@ -67,11 +67,55 @@ impl ToString for SymbolType {
 }
 
 #[derive(Clone)]
+struct RegTrace {
+    guarded: bool,
+    trace: Vec<StackVal>,
+}
+
+impl RegTrace {
+    pub fn new() -> Self {
+        Self {
+            guarded: false,
+            trace: vec![],
+        }
+    }
+
+    pub fn is_guarded(&self) -> bool {
+        self.guarded
+    }
+
+    pub fn guard(&mut self) {
+        self.guarded = true;
+    }
+
+    pub fn has_trace(&self) -> bool {
+        !self.trace.is_empty()
+    }
+
+    pub fn push(&mut self, val: StackVal) -> Status {
+        if !self.guarded {
+            return night_err!(
+                Runtime,
+                "Cannot override guarded register unless a parent guard exists."
+            );
+        }
+        self.guarded = false;
+        self.trace.push(val);
+        Ok(())
+    }
+
+    pub fn pop(&mut self) -> Option<StackVal> {
+        self.trace.pop()
+    }
+}
+
+#[derive(Clone)]
 pub struct ScopeInternal {
     stack: Vec<StackVal>,
     guard: HashSet<String>,
     block: HashSet<String>,
     env: HashMap<SymbolType, StackVal>,
+    register_trace: HashMap<String, RegTrace>,
 }
 
 impl ScopeInternal {
@@ -81,24 +125,37 @@ impl ScopeInternal {
             guard: HashSet::new(),
             block: HashSet::new(),
             env: HashMap::new(),
+            register_trace: HashMap::new(),
         }
     }
 
+    fn add_trace(&mut self, g: String) {
+        if !self.register_trace.contains_key(&g) {
+            self.register_trace.insert(g.clone(), RegTrace::new());
+        }
+    }
+
+    // For now this returns a `Status`, as I might use it in the future.
     pub fn add_guard(&mut self, g: String) -> Status {
-        if self.guard.insert(g.clone()) {
-            Ok(())
-        } else {
-            night_err!(
-                Runtime,
-                format!("Attempted to guard register '${g}' when it was already guarded.")
-            )
+        if !self.guard.insert(g.clone()) {
+            self.add_trace(g.clone());
+            let trace = self.register_trace.get_mut(&g).unwrap();
+            trace.guard();
+
+            // If a register is blocked, but a new guard overrides it, it is fine to remove the block early
+            self.block.remove(&g);
+            if let Some(v) = self.env.remove(&SymbolType::Register(g.clone())) {
+                trace.push(v)?;
+            }
         }
+        Ok(())
     }
 
-    pub fn rem_guard(&mut self, g: String) {
-        self.guard.remove(&g);
-        // `GuardEnd` always follows `Guard`, so the register will always be defined
-        let _ = self.undef_reg(g);
+    pub fn rem_guard(&mut self, g: String) -> Status {
+        if !self.register_trace.get(&g).unwrap().has_trace() {
+            self.guard.remove(&g);
+        }
+        self.undef_reg(g)
     }
 
     pub fn add_block(&mut self, g: String) -> Status {
@@ -159,16 +216,23 @@ impl ScopeInternal {
     }
 
     pub fn def_reg(&mut self, name: String, s: StackVal) -> Status<StackVal> {
+        self.add_trace(name.clone());
+        let trace = self.register_trace.get_mut(&name).unwrap();
+
         let guarded = self.guard.contains(&name);
         let reg = SymbolType::Register(name.clone());
         if self.env.contains_key(&reg) {
-            if guarded {
+            if guarded && !trace.is_guarded() {
                 return night_err!(
                     Runtime,
                     format!("Register '${name}' is guarded, cannot redefine.")
                 );
+            } else if guarded && trace.is_guarded() {
+                let v = self.env.remove(&reg).unwrap();
+                trace.push(v)?;
+            } else {
+                self.env.remove(&reg);
             }
-            self.env.remove(&reg);
         }
 
         self.env.insert(reg, s.clone());
@@ -182,18 +246,27 @@ impl ScopeInternal {
             .ok_or(NightError::UndefinedSymbol(sym.to_string()))
     }
 
-    pub fn undef_reg(&mut self, reg: String) -> Status {
-        if self.guard.contains(&reg) {
+    pub fn undef_reg(&mut self, name: String) -> Status {
+        let trace = self.register_trace.get_mut(&name).unwrap();
+        if self.guard.contains(&name) && !trace.has_trace() {
             return night_err!(
                 Runtime,
-                format!("Register '${reg}' is guarded, cannot undefine.")
+                format!("Register '${name}' is guarded, cannot undefine.")
             );
         }
-        let reg = SymbolType::Register(reg);
+        let reg = SymbolType::Register(name.clone());
         self.env
             .remove(&reg)
             .map(|_| ())
-            .ok_or(NightError::UndefinedSymbol(reg.to_string()))
+            .ok_or(NightError::Runtime(format!(
+                "Guarded register '${name}' must be defined within the block."
+            )))?;
+
+        // Reset register to previous guarded value
+        if let Some(v) = trace.pop() {
+            self.env.insert(reg, v);
+        }
+        Ok(())
     }
 
     pub fn get_sym(&self, sym: String) -> Status<&StackVal> {
@@ -242,6 +315,7 @@ impl From<Vec<StackVal>> for ScopeInternal {
             guard: HashSet::new(),
             block: HashSet::new(),
             env: HashMap::new(),
+            register_trace: HashMap::new(),
         }
     }
 }
