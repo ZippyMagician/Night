@@ -15,21 +15,24 @@ Note for future: Currently there is no way for builtins and operators to efficie
 - [x] Symbol definitions
 - [x] Register definitions
 - [x] Guard statements
-- [ ] Fully decide how arrays will work
-- [ ] Implement basic arrays
-- [ ] Implement array support ops
+- [x] Fully decide how arrays will work
+- [ ] Implement basic array support
+- [ ] Implement array support builtins + ops
 - [x] Implement operators
 - [x] Implement basic builtins (poc)
 - [ ] Choose + Implement more useful builtins
+- [x] Basic function composition boilerplate
+- [ ] Implement basic function composition builtins + ops
 
-#### In progress features
+### Considered features
+#### _(Implemented)_ Private/Public Guard Distinctions
 > For guards, maybe add a way to stop arbitrary blocks executed with the `call` op from using certain guarded values?
 > Something like:
 > ```ruby
 > (:private1 :private2 | :public) { ... }
 > ```
 > This also gives more syntactic use for `|`, which currently is only used for const defs.
-> If I did do this, I'd have to slightly redesign how guarded registers are stored. Currently they it's just a `HashSet<String>`, which wouldn't properly distinguish between the two types (and also the level they > exist in). Maybe add a new instr marker placed after `call` ops pre-execution as a marker? Then have a separate `HashSet` for inaccessible registers. Probably the simplest solution.
+> If I did do this, I'd have to slightly redesign how guarded registers are stored. Currently they it's just a `HashSet<String>`, which wouldn't properly distinguish between the two types (and also the level they exist in). Maybe add a new instr marker placed after `call` ops pre-execution as a marker? Then have a separate `HashSet` for inaccessible registers. Probably the simplest solution.
 
 Implemented in a slightly different manner that allows for more choices.
 ```hs
@@ -44,8 +47,18 @@ This will "block" the register *$private1* from being accessed in whatever is ca
 [:private1 :private2] | ?
 ```
 will work too.
+#### Drop `def` and `defr`/`!`
+> Definition of symbols and registers could be based on if it is undefined, i.e.,
+> ```ruby
+> -> dip (:top) : $top :top | ? $top
+> ```
+> will work, as `$top` starts undefined, meaning night will automatically assign the value to the register instead. In this version, `pop` is unecessary after the definition. Similarly,
+> ```ruby
+> (:top) { : $top :top | ? $top } dip
+> ```
+> would function as an alternate definition syntax. In this version, `def` and `defr` would no longer exist. The drawbacks include the fact that you can no longer dynamically define symbols from strings (which was possible via `def` and `defr`), and that typos will be much harder to notice when it comes to symbols. However, this would definitely clean up some definitions in the code. For instance, the `for` defintion found below would look much cleaner.
 
-#### Possible future ideas
+### Possible future ideas
 - Complex number support
 - More math builtins
 - Imports
@@ -60,7 +73,7 @@ x x * print
 -> mults2 (:a) :a ! 9 { . $a + } loop
 7 mults
 
--> dip (:top) : :top ! ; ? $top
+-> dip (:top) : :top ! ; :top | ? $top
 -> for (:for_f) {
 	:for_f ! ; . len
 	(:for_r :I) {
