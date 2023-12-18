@@ -9,7 +9,7 @@ use crate::lexer::{LexTok, Token};
 use crate::scope::{Scope, ScopeInternal, StackVal};
 use crate::utils;
 use crate::utils::error::{self, night_err, NightError, Span, Status};
-use crate::utils::function::{BlockFunc, Generable};
+use crate::utils::function::{BlockFunc, Generable, SingleFunc};
 use crate::value::Value;
 
 #[derive(Clone)]
@@ -166,6 +166,14 @@ impl<'a> Night<'a> {
                     }
                     _ => return night_err!(Syntax, "Register block statement requires a valid preceeding literal [word/string/array of strings]."),
                 }
+            }
+            Token::AtSign => {
+                let instr = self.instrs.pop_back().ok_or(NightError::Syntax(
+                    "Singleton block statement missing preceeding instruction.".to_string(),
+                ))?;
+                let span = Span::between(&self.spans[self.spans.len() - 2], self.spans.last().unwrap());
+                self.spans.push(span);
+                push_instr!(Instr::PushFunc, Rc::new(SingleFunc::from(instr)), self)
             }
             _ => return night_err!(Unimplemented, format!("Token '{tok:?}'")),
         }

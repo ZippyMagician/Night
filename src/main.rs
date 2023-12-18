@@ -32,8 +32,7 @@ fn main() {
     1 3.5 /
     1 2 3 4 { inc { 4 + } dip } dip
     
-    3 4 { + } curry ?
-    "#;
+    3 4 +@ curry ?"#;
 
     let mut lex = Lexer::new(TEST);
     let tokens = lex.tokenize();

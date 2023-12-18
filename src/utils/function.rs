@@ -12,30 +12,10 @@ pub trait Generable {
     fn len(&self) -> usize;
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
+#[repr(transparent)]
 pub struct BlockFunc {
     instrs: Vec<Instr>,
-}
-
-impl Generable for BlockFunc {
-    fn gen_instrs(&self, _: usize) -> Vec<Instr> {
-        self.instrs.clone()
-    }
-
-    fn len(&self) -> usize {
-        self.instrs.len()
-    }
-}
-
-impl<T> From<T> for BlockFunc
-where
-    T: Into<Vec<Instr>>,
-{
-    fn from(value: T) -> Self {
-        Self {
-            instrs: value.into(),
-        }
-    }
 }
 
 #[derive(Clone)]
@@ -44,9 +24,19 @@ pub struct CurriedFunc {
     block: Rc<dyn Generable>,
 }
 
-impl CurriedFunc {
-    pub fn new(op: StackVal, block: Rc<dyn Generable>) -> Self {
-        Self { op, block }
+#[derive(Clone)]
+#[repr(transparent)]
+pub struct SingleFunc(Instr);
+
+impl Generable for BlockFunc {
+    #[inline]
+    fn gen_instrs(&self, _: usize) -> Vec<Instr> {
+        self.instrs.clone()
+    }
+
+    #[inline]
+    fn len(&self) -> usize {
+        self.instrs.len()
     }
 }
 
@@ -64,8 +54,44 @@ impl Generable for CurriedFunc {
         s
     }
 
+    #[inline]
     fn len(&self) -> usize {
         1 + self.block.len()
+    }
+}
+
+impl Generable for SingleFunc {
+    #[inline]
+    fn gen_instrs(&self, _: usize) -> Vec<Instr> {
+        vec![self.0.clone()]
+    }
+
+    #[inline]
+    fn len(&self) -> usize {
+        1
+    }
+}
+
+impl<T> From<T> for BlockFunc
+where
+    T: Into<Vec<Instr>>,
+{
+    fn from(value: T) -> Self {
+        Self {
+            instrs: value.into(),
+        }
+    }
+}
+
+impl CurriedFunc {
+    pub fn new(op: StackVal, block: Rc<dyn Generable>) -> Self {
+        Self { op, block }
+    }
+}
+
+impl From<Instr> for SingleFunc {
+    fn from(value: Instr) -> Self {
+        Self(value)
     }
 }
 

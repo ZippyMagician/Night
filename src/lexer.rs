@@ -38,6 +38,8 @@ pub enum Token<'a> {
     OpenParen,
     /// `)`
     CloseParen,
+    /// `@`
+    AtSign,
 }
 
 pub type LexTok<'a> = (Token<'a>, Span<'a>);
@@ -128,6 +130,7 @@ impl<'a> Lexer<'a> {
             '\'' => self.consume_char_lit(start),
             '$' => self.consume_register(start),
             '"' => self.consume_string(start),
+            '@' => lex_tok!(Token::AtSign, self, start, 1, 0),
             '|' => lex_tok!(Token::Pipe, self, start, 1, 0),
             '[' => lex_tok!(Token::OpenBracket, self, start, 1, 0),
             ']' => lex_tok!(Token::CloseBracket, self, start, 1, 0),
