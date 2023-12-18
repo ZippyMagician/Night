@@ -32,7 +32,7 @@ impl StackVal {
 impl Display for StackVal {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Function(def) => write!(f, "<function>: {:?}", def.gen_instrs()),
+            Self::Function(def) => write!(f, "<function>: {:?}", def.gen_instrs(0)),
             Self::Value(v) => write!(f, "{v}"),
         }
     }

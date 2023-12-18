@@ -79,5 +79,6 @@ pub enum Builtin {
     CastToInt,
     /// Cast a number to a f32
     CastToFloat,
-    // TODO: more
+    /// curry ( op fn -- { op fn } )
+    Curry,
 }

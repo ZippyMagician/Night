@@ -280,7 +280,7 @@ impl<'a> Night<'a> {
             if let Instr::PushFunc(f, s) = self.instrs.pop_back().unwrap() {
                 let mut instrs = Vec::with_capacity(f.len() + 2);
                 instrs.push(Instr::Guard(guard.clone(), self.spans.len() - 2));
-                instrs.extend_from_slice(f.gen_instrs());
+                instrs.extend(f.gen_instrs(def_span));
                 instrs.push(Instr::GuardEnd(guard, self.spans.len() - 2));
                 self.instrs
                     .push_back(Instr::PushFunc(Rc::new(BlockFunc::from(instrs)), s));
@@ -403,11 +403,11 @@ impl<'a> Night<'a> {
 
     // Unroll the loop to avoid excessive recursion
     #[inline]
-    pub fn exec_fn(&mut self, def: &[Instr], from: usize) {
+    pub fn exec_fn(&mut self, def: Vec<Instr>, from: usize) {
         self.callback.push(from);
         self.instrs.push_front(Instr::EndCallback);
         for instr in def.into_iter().rev() {
-            self.instrs.push_front(instr.clone());
+            self.instrs.push_front(instr);
         }
     }
 
@@ -422,7 +422,7 @@ impl<'a> Night<'a> {
                 let definition = self.scope.borrow().get_sym(v).cloned()?;
                 match definition {
                     StackVal::Value(v) => self.scope.borrow_mut().push_value(v),
-                    StackVal::Function(f) => self.exec_fn(f.gen_instrs(), i),
+                    StackVal::Function(f) => self.exec_fn(f.gen_instrs(i), i),
                 }
             }
             PushSym(v, true, _) => {
@@ -475,7 +475,7 @@ impl<'a> Night<'a> {
     fn exec_op_call(&mut self, from: usize) -> Status {
         let scope = self.scope.clone();
         let def = scope.borrow_mut().pop()?.as_fn()?;
-        self.exec_fn(def.gen_instrs(), from);
+        self.exec_fn(def.gen_instrs(from), from);
         Ok(())
     }
 
@@ -489,7 +489,7 @@ impl<'a> Night<'a> {
         }
 
         for _ in 0..count {
-            self.exec_fn(def.gen_instrs(), from);
+            self.exec_fn(def.gen_instrs(from), from);
         }
         Ok(())
     }
@@ -500,7 +500,7 @@ impl<'a> Night<'a> {
         let condition = s.pop_value()?.as_bool()?;
         drop(s);
         if condition {
-            self.exec_fn(def.gen_instrs(), from);
+            self.exec_fn(def.gen_instrs(from), from);
         }
         Ok(())
     }

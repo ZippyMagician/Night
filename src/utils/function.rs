@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use crate::interpreter::Instr;
 use crate::scope::{Scope, StackVal};
 use crate::utils::error::Status;
@@ -5,7 +7,7 @@ use crate::value::Value;
 
 /// Defines a struct that can generate a list of instructions to be executed
 pub trait Generable {
-    fn gen_instrs<'a>(&'a self) -> &'a [Instr];
+    fn gen_instrs(&self, span: usize) -> Vec<Instr>;
 
     fn len(&self) -> usize;
 }
@@ -16,8 +18,8 @@ pub struct BlockFunc {
 }
 
 impl Generable for BlockFunc {
-    fn gen_instrs(&self) -> &[Instr] {
-        &self.instrs
+    fn gen_instrs(&self, _: usize) -> Vec<Instr> {
+        self.instrs.clone()
     }
 
     fn len(&self) -> usize {
@@ -33,6 +35,37 @@ where
         Self {
             instrs: value.into(),
         }
+    }
+}
+
+#[derive(Clone)]
+pub struct CurriedFunc {
+    op: StackVal,
+    block: Rc<dyn Generable>,
+}
+
+impl CurriedFunc {
+    pub fn new(op: StackVal, block: Rc<dyn Generable>) -> Self {
+        Self { op, block }
+    }
+}
+
+impl Generable for CurriedFunc {
+    fn gen_instrs(&self, span: usize) -> Vec<Instr> {
+        let op = if let StackVal::Function(f) = &self.op {
+            Instr::PushFunc(f.clone(), span)
+        } else {
+            Instr::Push(self.op.clone().as_value().unwrap(), span)
+        };
+
+        let mut s = Vec::with_capacity(1 + self.block.len());
+        s.push(op);
+        s.extend(self.block.gen_instrs(span));
+        s
+    }
+
+    fn len(&self) -> usize {
+        1 + self.block.len()
     }
 }
 

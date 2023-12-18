@@ -30,8 +30,9 @@ fn main() {
     -> fib . . 1 = : 0 = or ~ { . dec fib : 2 - fib + } if
     10 fib
     1 3.5 /
-    1 2 3 4 {inc {4 + } dip} dip
-    -- :test "this is a string" 'a :b:c
+    1 2 3 4 { inc { 4 + } dip } dip
+    
+    3 4 { + } curry ?
     "#;
 
     let mut lex = Lexer::new(TEST);
