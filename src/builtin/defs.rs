@@ -180,7 +180,7 @@ define_builtins! {
 
     "f32" => (Builtin::CastToFloat, 1(1): cast_to_float);
 
-    "curry" => (Builtin::Curry, 0(0): curry);
+    "bind" => (Builtin::Bind, 0(0): bind);
 
     "loop" => (Builtin::Loop, 0(0): |_| {
         night_err!(ContextFail, "An internal error occurred, this should not have been called.")
@@ -390,7 +390,7 @@ fn cast_to_float(_: Scope, value: Value) -> Status<Value> {
     Ok(Value::from(value.as_float()?))
 }
 
-fn curry(scope: Scope) -> Status {
+fn bind(scope: Scope) -> Status {
     let mut s = scope.borrow_mut();
     let block = s.pop()?.as_fn()?;
     let op = s.pop()?;
