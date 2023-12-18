@@ -3,17 +3,29 @@ use crate::scope::{Scope, StackVal};
 use crate::utils::error::Status;
 use crate::value::Value;
 
-// Function trait for built-in symbols and operators
-pub trait InlineFunction {
-    fn call(&self, scope: Scope) -> Status;
+/// Defines a struct that can generate a list of instructions to be executed
+pub trait Generable {
+    fn gen_instrs<'a>(&'a self) -> &'a [Instr];
+
+    fn len(&self) -> usize;
 }
 
 #[derive(Clone, Debug)]
-pub struct BiFunction {
-    pub instrs: Vec<Instr>,
+pub struct BlockFunc {
+    instrs: Vec<Instr>,
 }
 
-impl<T> From<T> for BiFunction
+impl Generable for BlockFunc {
+    fn gen_instrs(&self) -> &[Instr] {
+        &self.instrs
+    }
+
+    fn len(&self) -> usize {
+        self.instrs.len()
+    }
+}
+
+impl<T> From<T> for BlockFunc
 where
     T: Into<Vec<Instr>>,
 {

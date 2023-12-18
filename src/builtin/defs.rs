@@ -4,7 +4,7 @@ use super::{Builtin, Operator};
 use crate::scope::{Scope, StackVal};
 use crate::utils;
 use crate::utils::error::{night_err, Status};
-use crate::utils::function::{self, InlineFunction};
+use crate::utils::function;
 use crate::value::Value;
 
 // TODO: fix this + create required `arity` functions
@@ -68,10 +68,8 @@ macro_rules! define_ops {
                 )*
                 None
             }
-        }
 
-        impl InlineFunction for Operator {
-            fn call(&self, scope: Scope) -> Status {
+            pub fn call(&self, scope: Scope) -> Status {
                 match self {
                     $(
                         $tok => _define_internal!(scope, $a($b), $def).into()
@@ -98,10 +96,8 @@ macro_rules! define_builtins {
                     ),*
                 }
             }
-        }
 
-        impl InlineFunction for Builtin {
-            fn call(&self, scope: Scope) -> Status {
+            pub fn call(&self, scope: Scope) -> Status {
                 match self {
                     $(
                         $tok => _define_internal!(scope, $a($b), $def).into()

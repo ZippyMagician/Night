@@ -9,13 +9,13 @@ use crate::lexer::{LexTok, Token};
 use crate::scope::{Scope, ScopeInternal, StackVal};
 use crate::utils;
 use crate::utils::error::{self, night_err, NightError, Span, Status};
-use crate::utils::function::{BiFunction, InlineFunction};
+use crate::utils::function::{BlockFunc, Generable};
 use crate::value::Value;
 
 #[derive(Clone)]
 pub enum Instr {
     Push(Value, usize),
-    PushFunc(BiFunction, usize),
+    PushFunc(Rc<dyn Generable>, usize),
     PushSym(String, bool, usize),
     Op(Operator, usize),
     Internal(Builtin, usize),
@@ -212,7 +212,7 @@ impl<'a> Night<'a> {
                         block.push_front(Instr::Guard(guard.clone(), span_start - 1));
                         block.push_back(Instr::GuardEnd(guard, span_start - 1));
                     }
-                    push_instr!(Instr::PushFunc, BiFunction::from(block), self);
+                    push_instr!(Instr::PushFunc, Rc::new(BlockFunc::from(block)), self);
 
                     if block_queue.is_empty() {
                         break;
@@ -277,12 +277,13 @@ impl<'a> Night<'a> {
         if start != Token::OpenCurly {
             self.parse_define_body(guard, def_span, orig_len, is_const)?;
         } else if !guard.is_empty() {
-            if let Instr::PushFunc(mut f, s) = self.instrs.pop_back().unwrap() {
-                f.instrs
-                    .insert(0, Instr::Guard(guard.clone(), self.spans.len() - 2));
-                f.instrs.push(Instr::GuardEnd(guard, self.spans.len() - 2));
+            if let Instr::PushFunc(f, s) = self.instrs.pop_back().unwrap() {
+                let mut instrs = Vec::with_capacity(f.len() + 2);
+                instrs.push(Instr::Guard(guard.clone(), self.spans.len() - 2));
+                instrs.extend_from_slice(f.gen_instrs());
+                instrs.push(Instr::GuardEnd(guard, self.spans.len() - 2));
                 self.instrs
-                    .push_back(Instr::PushFunc(BiFunction::from(f), s));
+                    .push_back(Instr::PushFunc(Rc::new(BlockFunc::from(instrs)), s));
             } else {
                 unreachable!();
             }
@@ -373,7 +374,7 @@ impl<'a> Night<'a> {
                 def.push_front(Instr::Guard(guard.clone(), span_start - 1));
                 def.push_back(Instr::GuardEnd(guard, span_start - 1));
             }
-            push_instr!(Instr::PushFunc, BiFunction::from(def), self);
+            push_instr!(Instr::PushFunc, Rc::new(BlockFunc::from(def)), self);
         }
 
         Ok(())
@@ -402,11 +403,11 @@ impl<'a> Night<'a> {
 
     // Unroll the loop to avoid excessive recursion
     #[inline]
-    pub fn exec_fn(&mut self, def: Vec<Instr>, from: usize) {
+    pub fn exec_fn(&mut self, def: &[Instr], from: usize) {
         self.callback.push(from);
         self.instrs.push_front(Instr::EndCallback);
         for instr in def.into_iter().rev() {
-            self.instrs.push_front(instr);
+            self.instrs.push_front(instr.clone());
         }
     }
 
@@ -421,7 +422,7 @@ impl<'a> Night<'a> {
                 let definition = self.scope.borrow().get_sym(v).cloned()?;
                 match definition {
                     StackVal::Value(v) => self.scope.borrow_mut().push_value(v),
-                    StackVal::Function(f) => self.exec_fn(f.instrs, i),
+                    StackVal::Function(f) => self.exec_fn(f.gen_instrs(), i),
                 }
             }
             PushSym(v, true, _) => {
@@ -474,7 +475,7 @@ impl<'a> Night<'a> {
     fn exec_op_call(&mut self, from: usize) -> Status {
         let scope = self.scope.clone();
         let def = scope.borrow_mut().pop()?.as_fn()?;
-        self.exec_fn(def.instrs, from);
+        self.exec_fn(def.gen_instrs(), from);
         Ok(())
     }
 
@@ -488,7 +489,7 @@ impl<'a> Night<'a> {
         }
 
         for _ in 0..count {
-            self.exec_fn(def.instrs.clone(), from);
+            self.exec_fn(def.gen_instrs(), from);
         }
         Ok(())
     }
@@ -499,7 +500,7 @@ impl<'a> Night<'a> {
         let condition = s.pop_value()?.as_bool()?;
         drop(s);
         if condition {
-            self.exec_fn(def.instrs, from);
+            self.exec_fn(def.gen_instrs(), from);
         }
         Ok(())
     }

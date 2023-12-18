@@ -1,19 +1,20 @@
 use std::collections::{HashMap, HashSet};
 use std::fmt::{self, Display};
+use std::rc::Rc;
 
 use crate::utils::error::{night_err, NightError, Status};
-use crate::utils::function::BiFunction;
+use crate::utils::function::Generable;
 use crate::value::Value;
 
 #[derive(Clone)]
 pub enum StackVal {
     // TODO: See `interpreter.rs`'s `Instr::PushFunc` for message
-    Function(BiFunction),
+    Function(Rc<dyn Generable>),
     Value(Value),
 }
 
 impl StackVal {
-    pub fn as_fn(self) -> Status<BiFunction> {
+    pub fn as_fn(self) -> Status<Rc<dyn Generable>> {
         match self {
             Self::Function(f) => Ok(f),
             Self::Value(_) => night_err!(UnsupportedType, "Expected function, got value"),
@@ -31,7 +32,7 @@ impl StackVal {
 impl Display for StackVal {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Function(def) => write!(f, "<function>: {:?}", def.instrs),
+            Self::Function(def) => write!(f, "<function>: {:?}", def.gen_instrs()),
             Self::Value(v) => write!(f, "{v}"),
         }
     }
@@ -43,9 +44,12 @@ impl From<Value> for StackVal {
     }
 }
 
-impl From<BiFunction> for StackVal {
-    fn from(value: BiFunction) -> Self {
-        Self::Function(value)
+impl<T> From<T> for StackVal
+where
+    T: Generable + 'static,
+{
+    fn from(value: T) -> Self {
+        Self::Function(Rc::new(value))
     }
 }
 
