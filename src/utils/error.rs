@@ -38,6 +38,7 @@ impl<'a> Span<'a> {
         }
     }
 
+    // FIXME: Some spans being "clipped"
     pub fn between(left: &Span<'a>, right: &Span<'a>) -> Self {
         Self {
             code: left.code,
@@ -46,6 +47,10 @@ impl<'a> Span<'a> {
             line_start: std::cmp::min(left.line_start, right.line_start),
             line_end: std::cmp::max(left.line_end, right.line_end),
         }
+    }
+
+    pub fn as_lit(&self) -> &[u8] {
+        &self.code.as_bytes()[self.start..self.start + self.len]
     }
 
     fn fmt_line(&self, line: usize) -> String {
@@ -128,6 +133,10 @@ pub(crate) use lex_err;
 pub fn error(msg: impl Display, span: Span<'_>) -> ! {
     println!("{msg} {span}");
     std::process::exit(-1)
+}
+
+pub fn warn(msg: impl Display, span: Span<'_>) {
+    println!("Warning: {msg} {span}")
 }
 
 pub fn error_with_trace(msg: impl Display, span: Span<'_>, trace: Vec<Span<'_>>) -> ! {

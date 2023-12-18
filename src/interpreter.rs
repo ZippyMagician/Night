@@ -152,7 +152,12 @@ impl<'a> Night<'a> {
             Token::CloseParen => return night_err!(Syntax, "Unbalanced parenthesis."),
             Token::OpenCurly => self.parse_block(None)?,
             Token::CloseCurly => return night_err!(Syntax, "Unbalanced block."),
-            Token::Define => self.parse_define()?,
+            Token::Define => {
+                if self.spans.len() > 1 && self.spans[self.spans.len() - 2].as_lit() != b"\n" {
+                    return night_err!(Syntax, "Definition must begin at the start of a line.");
+                }
+                self.parse_define()?
+            }
             Token::Symbol(_) => self.instrs.push_back(self.maybe_builtin(tok)),
             Token::Newline | Token::EOF => {} // skip
             Token::Pipe => {
@@ -171,7 +176,10 @@ impl<'a> Night<'a> {
                 let instr = self.instrs.pop_back().ok_or(NightError::Syntax(
                     "Singleton block statement missing preceeding instruction.".to_string(),
                 ))?;
-                let span = Span::between(&self.spans[self.spans.len() - 2], self.spans.last().unwrap());
+                let span = Span::between(
+                    &self.spans[self.spans.len() - 2],
+                    self.spans.last().unwrap(),
+                );
                 self.spans.push(span);
                 push_instr!(Instr::PushFunc, Rc::new(SingleFunc::from(instr)), self)
             }
@@ -270,6 +278,15 @@ impl<'a> Night<'a> {
             (start, span) = self.tokens.next().ok_or(NightError::Syntax(
                 "Definition cannot be empty.".to_string(),
             ))?;
+        }
+
+        if start == Token::Newline {
+            let span = Span::between(
+                &self.spans[self.spans.len() - 2],
+                &self.spans.last().unwrap(),
+            );
+            self.spans.push(span);
+            return night_err!(Syntax, "Definition cannot start with a newline.");
         }
 
         // Const definition
