@@ -1,10 +1,10 @@
 # Night
-**(WIP)** Interpreted concatenative stack-based language.
+Stack-based concatenative language.
 
 ## About
-TODO. Currently working on getting the major stuff implemented before I rewrite the readme and work on documentation.
+**TODO:** Proper about section. Currently the README is mainly used for information storage for my future usage.
 
-Note for future: Currently there is no way for builtins and operators to efficiently call block arguments. The current solution is to offload their definitions to the actual `Night` struct and leave the definitions in `defs.rs` as internal errors (since they should never be called). It's not like it's any slower to do it this way, I just don't really like it right now, as it seems clunky in some situations. Might be a better way.
+Note for future: Currently there is no way for builtins and operators to efficiently call block arguments (`call`, `loop`, `if`). The current solution is to make them exceptions called directly from `Night`, instead of defining them in `builtin/defs.rs` like the other operators and builtin symbols. It's not something vitally important to change, just something that is slightly clunky in my opinion. This most likely won't be changed however, as it would require a major overhaul to some parts of the code.
 
 - [x] Lexer
 - [x] Basic interpreter
@@ -56,9 +56,29 @@ will work too.
 > ```ruby
 > (:top) { : $top :top | ? $top } dip
 > ```
-> would function as an alternate definition syntax. In this version, `def` and `defr` would no longer exist. The drawbacks include the fact that you can no longer dynamically define symbols from strings (which was possible via `def` and `defr`), and that typos will be much harder to notice when it comes to symbols. However, this would definitely clean up some definitions in the code. For instance, the `for` defintion found below would look much cleaner.
+> would function as an alternate definition syntax. In this version, `def` and `defr` would no longer exist. 
+> 
+> The drawbacks include the fact that you can no longer dynamically define symbols from strings (which was possible via `def` and `defr`), and that typos will be much harder to notice when it comes to symbols. However, this would definitely clean up some definitions in the code. 
+> 
+> For instance, the `for` defintion, as can be seen below, would look much cleaner. Additionally, the definition of registers will be much more apparent at first glance. However, since the pattern `:reg ! ;` has become `$reg`, `:reg !` must become `$reg $reg`, which looks clunky and is not ideal.
+> 
+> Below is a code snippet where `defr`/`!` has been ommitted. `:reg ! ;` has become `$reg ;`.
+> ```ruby
+> -> mults  (:a) $a ; 11 1 range { $a $I + } for
+> -> mults2 (:a) $a 9 { . $a + } loop
+> 
+> -> dip (:top) : $top ; :top | ? $top
+> -> for (:for_f) {
+>     $for_f ; . len (:for_r :I) { . first : 1 drop $for_r ; $I ; $for_f [:for_f :for_r] | ? $for_r } loop
+> }
+> ```
+> You can compare the definition of `dip` with the prior example in this feature idea, where register definition implicitly pops for comparison. If this feature is implemented, it remains to be seen which variant will be the standard. Most likely, despite the slight unintuitiveness in my opinion, it remains superior to the alternative `$a $a` pattern you would need for the `mults2` definition, where register definition does not preserve on the stack.
+> 
+> There also exists a possibility this change will exist solely for register definitions, and there be no alternative symbol definition besides `->` syntactically on implementation of this idea, which may help dodge the issue mentioned above wherein typos can be very difficult to track down.
+> 
+> Finally, this change would warrant a look at `undef` (and also possibly `undefr`) to see how that will be handled.
 
-### Possible future ideas
+#### Other
 - Complex number support
 - More math builtins
 - Imports
