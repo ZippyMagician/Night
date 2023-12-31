@@ -38,12 +38,11 @@ impl<'a> Span<'a> {
         }
     }
 
-    // FIXME: Some spans being "clipped"
     pub fn between(left: &Span<'a>, right: &Span<'a>) -> Self {
         Self {
             code: left.code,
             start: left.start,
-            len: (left.start + left.len).abs_diff(right.start + right.len) + 1,
+            len: right.start.abs_diff(left.start + left.len) + left.len + right.len,
             line_start: std::cmp::min(left.line_start, right.line_start),
             line_end: std::cmp::max(left.line_end, right.line_end),
         }

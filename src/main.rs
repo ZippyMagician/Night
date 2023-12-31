@@ -32,8 +32,6 @@ fn main() {
     1 3.5 / -- 0.2857143
     1 2 3 4 { inc { 4 + } dip } dip -- 1 6 4 4
     3 4 +@ bind ? -- 7
-    -- -> double
-    -- 4 double
     "#;
 
     let mut lex = Lexer::new(TEST);
