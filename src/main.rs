@@ -25,24 +25,29 @@ fn main() {
     7 mults
     "#;*/
 
-    // TODO: Test once more logical ops are implemented
-    const TEST: &'static str = r#"
+    /*const TEST: &'static str = r#"
     -> fib . . 1 = : 0 = or ~ { . dec fib : 2 - fib + } if
     10 fib -- 55
     1 3.5 / -- 0.2857143
     1 2 3 4 { inc { 4 + } dip } dip -- 1 6 4 4
     3 4 +@ curry ? -- 7
     0 1 and@ not@ bind ? -- 1
+    "#;*/
+
+    const TEST: &'static str = r#"
+    4 inc@ dec@ bi
     "#;
 
     let mut lex = Lexer::new(TEST);
     let tokens = lex.tokenize();
     let mut night = Night::new(TEST, tokens.clone());
 
-    utils::define_fn(
+    utils::define_fns(
         &mut night,
         r#"
         -> dip (:top) : :top ! ; :top | ? $top
+        -> keep over ?@ dip
+        -> bi keep@ dip ?
         "#,
     );
 

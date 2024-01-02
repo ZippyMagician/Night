@@ -12,7 +12,7 @@ pub fn is_one_word(s: &str) -> bool {
     s.chars().all(valid_symbol_chr)
 }
 
-pub fn define_fn(night: &mut Night, def: &'static str) {
+pub fn define_fns(night: &mut Night, def: &'static str) {
     let mut lexer = Lexer::new(def);
     let tokens = lexer.tokenize();
     night.inject_code(tokens);

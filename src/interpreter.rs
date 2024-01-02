@@ -363,11 +363,13 @@ impl<'a> Night<'a> {
         is_const: bool,
     ) -> Status {
         let mut def = VecDeque::new();
+        let mut final_span = Span::empty();
         while let Some((tok, s)) = self.tokens.next() {
-            self.spans.push(s);
             if tok == Token::Newline || tok == Token::EOF {
+                final_span = s;
                 break;
             }
+            self.spans.push(s);
             self.build_instr(tok)?;
         }
 
@@ -402,6 +404,7 @@ impl<'a> Night<'a> {
             push_instr!(Instr::PushFunc, Rc::new(BlockFunc::from(def)), self);
         }
 
+        self.spans.push(final_span);
         Ok(())
     }
 
