@@ -6,7 +6,7 @@ use super::{Builtin, Operator};
 use crate::scope::{Scope, StackVal};
 use crate::utils;
 use crate::utils::error::{night_err, Status};
-use crate::utils::function::{self, CurriedFunc};
+use crate::utils::function::{self, ComposedFunc, CurriedFunc};
 use crate::value::Value;
 
 // TODO: fix this + create required `arity` functions
@@ -179,6 +179,8 @@ define_builtins! {
     "i32" => (Builtin::CastToInt, 1(1): cast_to_int);
 
     "f32" => (Builtin::CastToFloat, 1(1): cast_to_float);
+
+    "curry" => (Builtin::Curry, 0(0): curry);
 
     "bind" => (Builtin::Bind, 0(0): bind);
 
@@ -390,10 +392,20 @@ fn cast_to_float(_: Scope, value: Value) -> Status<Value> {
     Ok(Value::from(value.as_float()?))
 }
 
-fn bind(scope: Scope) -> Status {
+fn curry(scope: Scope) -> Status {
     let mut s = scope.borrow_mut();
     let block = s.pop()?.as_fn()?;
     let op = s.pop()?;
     s.push(StackVal::Function(Rc::new(CurriedFunc::new(op, block))));
+    Ok(())
+}
+
+fn bind(scope: Scope) -> Status {
+    let mut s = scope.borrow_mut();
+    let block2 = s.pop()?.as_fn()?;
+    let block1 = s.pop()?.as_fn()?;
+    s.push(StackVal::Function(Rc::new(ComposedFunc::new(
+        block1, block2,
+    ))));
     Ok(())
 }

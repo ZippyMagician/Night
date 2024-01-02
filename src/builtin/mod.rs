@@ -45,11 +45,11 @@ pub enum Operator {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(C)]
 pub enum Builtin {
-    /// Pop top value, print to stdout
+    /// Pop top value, print to stdout ( a --  )
     Print,
-    /// Increment top value by 1
+    /// Increment top value by 1 ( a -- a+1 )
     Inc,
-    /// Decrement top value by 1
+    /// Decrement top value by 1 ( a -- a-1 )
     Dec,
     /// Symbol definition
     Def,
@@ -57,9 +57,9 @@ pub enum Builtin {
     Undef,
     /// (temp) symbol / register undefinition
     UndefReg,
-    /// n <function> loop -> call function n times
+    /// n <function> loop -> call function n times ( n f --  )
     Loop,
-    /// cond <function> if -> call function if cond is truthy
+    /// cond <function> if -> call function if cond is truthy ( cond f --  )
     If,
     /// over ( a b -- a b a )
     Over,
@@ -67,18 +67,20 @@ pub enum Builtin {
     Rot,
     /// rotr ( a b c -- c a b )
     RotRight,
-    /// Logical or of two values
+    /// Logical or of two values ( a b -- a )
     LogicalOr,
-    /// Logical and of two values
+    /// Logical and of two values ( a b -- a )
     LogicalAnd,
-    /// Floor a number into an i32
+    /// floor ( num -- i32 )
     Floor,
-    /// Ceil a number into an i32
+    /// ceil ( num -- i32 )
     Ceil,
-    /// Cast a number to an i32
+    /// i32 ( num -- i32 )
     CastToInt,
-    /// Cast a number to a f32
+    /// f32 ( num -- f32 )
     CastToFloat,
-    /// bind ( op fn -- { op fn } )
+    /// curry ( op f -- { op ...f } )
+    Curry,
+    /// bind ( f1 f2 -- { ...f1 ...f2 } )
     Bind,
 }

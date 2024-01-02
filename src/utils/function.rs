@@ -25,6 +25,12 @@ pub struct CurriedFunc {
 }
 
 #[derive(Clone)]
+pub struct ComposedFunc {
+    block1: Rc<dyn Generable>,
+    block2: Rc<dyn Generable>,
+}
+
+#[derive(Clone)]
 #[repr(transparent)]
 pub struct SingleFunc(Instr);
 
@@ -41,6 +47,7 @@ impl Generable for BlockFunc {
 }
 
 impl Generable for CurriedFunc {
+    #[inline]
     fn gen_instrs(&self, span: usize) -> Vec<Instr> {
         let op = if let StackVal::Function(f) = &self.op {
             Instr::PushFunc(f.clone(), span)
@@ -48,7 +55,7 @@ impl Generable for CurriedFunc {
             Instr::Push(self.op.clone().as_value().unwrap(), span)
         };
 
-        let mut s = Vec::with_capacity(1 + self.block.len());
+        let mut s = Vec::with_capacity(self.len());
         s.push(op);
         s.extend(self.block.gen_instrs(span));
         s
@@ -57,6 +64,21 @@ impl Generable for CurriedFunc {
     #[inline]
     fn len(&self) -> usize {
         1 + self.block.len()
+    }
+}
+
+impl Generable for ComposedFunc {
+    #[inline]
+    fn gen_instrs(&self, span: usize) -> Vec<Instr> {
+        let mut s = Vec::with_capacity(self.len());
+        s.extend(self.block1.gen_instrs(span));
+        s.extend(self.block2.gen_instrs(span));
+        s
+    }
+
+    #[inline]
+    fn len(&self) -> usize {
+        self.block1.len() + self.block2.len()
     }
 }
 
@@ -76,6 +98,7 @@ impl<T> From<T> for BlockFunc
 where
     T: Into<Vec<Instr>>,
 {
+    #[inline]
     fn from(value: T) -> Self {
         Self {
             instrs: value.into(),
@@ -84,12 +107,21 @@ where
 }
 
 impl CurriedFunc {
+    #[inline]
     pub fn new(op: StackVal, block: Rc<dyn Generable>) -> Self {
         Self { op, block }
     }
 }
 
+impl ComposedFunc {
+    #[inline]
+    pub fn new(block1: Rc<dyn Generable>, block2: Rc<dyn Generable>) -> Self {
+        Self { block1, block2 }
+    }
+}
+
 impl From<Instr> for SingleFunc {
+    #[inline]
     fn from(value: Instr) -> Self {
         Self(value)
     }
