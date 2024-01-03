@@ -26,7 +26,7 @@ fn main() {
     "#;*/
 
     /*const TEST: &'static str = r#"
-    -> fib . . 1 = : 0 = or ~ { . dec fib : 2 - fib + } if
+    -> fib . 2 >= { { dec fib } { 2 - fib } bi + } if
     10 fib -- 55
     1 3.5 / -- 0.2857143
     1 2 3 4 { inc { 4 + } dip } dip -- 1 6 4 4
@@ -37,6 +37,9 @@ fn main() {
     const TEST: &'static str = r#"
     3 4 +@ *@ bi2
     5 3 { 0 : - } dec@ fork
+
+    -> fib { 0 1 } dip { +@ ;@ bi2 } loop ;
+    10 fib
     "#;
 
     let mut lex = Lexer::new(TEST);

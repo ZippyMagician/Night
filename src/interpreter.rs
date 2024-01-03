@@ -290,25 +290,11 @@ impl Night {
             self.build_instr(start.clone())?;
         }
 
-        // Body of definition is either a single block or a sequence of tokens followed by a newline/eof
-        if start != Token::OpenCurly {
-            self.parse_define_body(guard, def_span, orig_len, is_const)?;
-        } else if !guard.is_empty() {
-            if is_const {
-                self.span_between(self.spans.len() - 2, self.spans.len() - 1);
-                return night_err!(Syntax, "Guarded definitions cannot be const.");
-            }
-            if let Instr::PushFunc(f, s) = self.instrs.pop_back().unwrap() {
-                let mut instrs = Vec::with_capacity(f.len() + 2);
-                instrs.push(Instr::Guard(guard.clone(), self.spans.len() - 2));
-                instrs.extend(f.gen_instrs(def_span));
-                instrs.push(Instr::GuardEnd(guard, self.spans.len() - 2));
-                self.instrs
-                    .push_back(Instr::PushFunc(Rc::new(BlockFunc::from(instrs)), s));
-            } else {
-                unreachable!();
-            }
+        if !guard.is_empty() && is_const {
+            self.span_between(self.spans.len() - 2, self.spans.len() - 1);
+            return night_err!(Syntax, "Guarded definitions cannot be const.");
         }
+        self.parse_define_body(guard, def_span, orig_len, is_const)?;
 
         self.instrs
             .push_back(Instr::Push(Value::from(name), name_span));
