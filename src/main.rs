@@ -35,7 +35,8 @@ fn main() {
     "#;*/
 
     const TEST: &'static str = r#"
-    4 inc@ dec@ bi
+    3 4 +@ *@ bi2
+    5 3 { 0 : - } dec@ fork
     "#;
 
     let mut lex = Lexer::new(TEST);
@@ -45,9 +46,15 @@ fn main() {
     utils::define_fns(
         &mut night,
         r#"
+        -> dup2 over over
         -> dip (:top) : :top ! ; :top | ? $top
+        -> dip2 : dip@ dip
         -> keep over ?@ dip
+        -> keep2 dup2@ dip dip2
         -> bi keep@ dip ?
+        -> bi2 keep2@ dip ?
+        -> fork dip@ dip ?
+        -> fork2 dip2@ dip ?
         "#,
     );
 
