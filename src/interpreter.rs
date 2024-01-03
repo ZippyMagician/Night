@@ -501,11 +501,14 @@ impl Night {
 
     fn exec_builtin_if(&mut self, from: usize) -> Status {
         let mut s = self.scope.borrow_mut();
-        let def = s.pop()?.as_fn()?;
-        let condition = s.pop_value()?.as_bool()?;
+        let false_def = s.pop()?.as_fn()?;
+        let true_def = s.pop()?.as_fn()?;
+        let cond = s.pop_value()?.as_bool()?;
         drop(s);
-        if condition {
-            self.exec_fn(def.gen_instrs(from), from);
+        if cond {
+            self.exec_fn(true_def.gen_instrs(from), from);
+        } else {
+            self.exec_fn(false_def.gen_instrs(from), from);
         }
         Ok(())
     }

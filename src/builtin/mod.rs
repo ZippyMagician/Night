@@ -76,7 +76,7 @@ pub enum Builtin {
     UndefReg,
     /// n <function> loop -> call function n times ( n f --  )
     Loop,
-    /// cond <function> if -> call function if cond is truthy ( cond f --  )
+    /// cond <function> when -> call function if cond is truthy ( cond f --  )
     If,
     /// Logical or of two values ( a b -- a )
     LogicalOr,

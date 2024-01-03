@@ -187,7 +187,7 @@ impl Display for Value {
                     write!(f, "{l}")
                 }
             }
-            Type::Str(s) => write!(f, "\"{s}\""),
+            Type::Str(s) => write!(f, "{s}"),
         }
     }
 }

@@ -26,7 +26,7 @@ fn main() {
     "#;*/
 
     /*const TEST: &'static str = r#"
-    -> fib . 2 >= { { dec fib } { 2 - fib } bi + } if
+    -> fib . 2 >= { { dec fib } { 2 - fib } bi + } when
     10 fib -- 55
     1 3.5 / -- 0.2857143
     1 2 3 4 { inc { 4 + } dip } dip -- 1 6 4 4
@@ -35,11 +35,12 @@ fn main() {
     "#;*/
 
     const TEST: &'static str = r#"
-    3 4 +@ *@ bi2
-    5 3 { 0 : - } dec@ fork
+    -> ASSERT_EQ = "PASS" "FAIL" choose print
 
     -> fib { 0 1 } dip { +@ ;@ bi2 } loop ;
-    10 fib
+    3 4 +@ *@ bi2
+    5 3 { 0 : - } dec@ fork
+    10 fib 55 ASSERT_EQ
     "#;
 
     let mut lex = Lexer::new(TEST);
@@ -57,6 +58,8 @@ fn main() {
         -> bi2 keep2@ dip ?
         -> fork dip@ dip ?
         -> fork2 dip2@ dip ?
+        -> when : ?@ ;@ if
+        -> choose rot ;@ nip@ if
         "#,
     );
 
