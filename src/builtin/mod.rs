@@ -56,6 +56,10 @@ pub enum Builtin {
     Dupd,
     /// swpd ( a b c -- b a c )
     Swapd,
+    /// pop2 ( a b --  )
+    Pop2,
+    /// pop3 ( a b c --  )
+    Pop3,
     /// nip ( a b -- b )
     Popd,
     /// dup2 ( a b -- a b a b )

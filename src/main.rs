@@ -43,7 +43,7 @@ fn main() {
     -> each_integer_from {
         over2 <
         { { nip ? } keep3 inc@ dip2 each_integer_from }
-        { ; ; ; } if 
+        pop3@ if 
     }
     -> times ;@ : bind 0@ dip2 each_integer_from
     10 5 { 2 * } times
@@ -56,7 +56,7 @@ fn main() {
     utils::define_fns(
         &mut night,
         r#"
-        -> nrot 1 - {} { { dip : } curry } swpd loop ?
+        -> rotn 1 - {} { { dip : } curry } swpd loop ?
         -> over2 pick pick
         -> dip (:top) : :top ! ; :top | ? $top
         -> dip2 : dip@ dip
@@ -69,7 +69,7 @@ fn main() {
         -> fork dip@ dip ?
         -> fork2 dip2@ dip ?
         -> when : ?@ ;@ if
-        -> choose 3 nrot ;@ nip@ if
+        -> choose 3 rotn ;@ nip@ if
         "#,
     );
 
