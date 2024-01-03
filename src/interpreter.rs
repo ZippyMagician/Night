@@ -369,6 +369,25 @@ impl Night {
 
             self.instrs
                 .push_back(Instr::Push(scope.pop_value()?, start));
+        // TODO: Finish to fix single block defs
+        } else if def.len() == 1 {
+            if let Instr::PushFunc(f, s) = &def[0] {
+                let mut instrs = Vec::with_capacity(f.len() + 2);
+                instrs.push(Instr::Guard(guard.clone(), self.spans.len() - 2));
+                instrs.extend(f.gen_instrs(*s));
+                instrs.push(Instr::GuardEnd(guard, self.spans.len() - 2));
+                self.instrs
+                    .push_back(Instr::PushFunc(Rc::new(BlockFunc::from(instrs)), *s));
+            } else {
+                let span = def[0].get_span();
+                if !guard.is_empty() {
+                    def.push_front(Instr::Guard(guard.clone(), span - 1));
+                    def.push_back(Instr::GuardEnd(guard, span - 1));
+                    push_instr!(Instr::PushFunc, Rc::new(BlockFunc::from(def)), self);
+                } else {
+                    self.instrs.push_back(def.pop_back().unwrap());
+                }
+            }
         } else {
             let span_start = def[0].get_span();
             let span_end = def[def.len() - 1].get_span();
@@ -484,6 +503,9 @@ impl Night {
         Ok(())
     }
 
+    // This can be implemented as a fn instead of a builtin at this point.
+    // See Factor's implementation of `times`, the `night` version can be implemented
+    // with the same logic.
     fn exec_builtin_loop(&mut self, from: usize) -> Status {
         let mut s = self.scope.borrow_mut();
         let def = s.pop()?.as_fn()?;

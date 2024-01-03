@@ -172,7 +172,7 @@ define_builtins! {
 
     "swpd" => (Builtin::Swapd, 3(3): swap_dip);
 
-    "nip" => (Builtin::Popd, 1(2): pop_dip);
+    "nip" => (Builtin::Popd, 0(0): pop_dip);
 
     "dup2" => (Builtin::Dup2, 4(2): dup2);
 
@@ -389,8 +389,12 @@ fn swap_dip(scope: Scope) -> Status {
     Ok(())
 }
 
-fn pop_dip(_: Scope, left: Value, _: Value) -> Status<Value> {
-    Ok(left)
+fn pop_dip(scope: Scope) -> Status {
+    let mut s = scope.borrow_mut();
+    let top = s.pop()?;
+    s.pop()?;
+    s.push(top);
+    Ok(())
 }
 
 fn dup2(scope: Scope) -> Status {
