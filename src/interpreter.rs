@@ -45,10 +45,10 @@ impl Instr {
     }
 }
 
-pub struct Night<'a> {
-    _code: Box<str>,
-    tokens: IntoIter<LexTok<'a>>,
-    spans: Vec<Span<'a>>,
+pub struct Night {
+    input: Box<str>,
+    tokens: IntoIter<LexTok>,
+    spans: Vec<Span>,
 
     // It's easier to use a deque, since I can use a while `pop_back` and then easily modify in between iterations
     instrs: VecDeque<Instr>,
@@ -70,10 +70,10 @@ macro_rules! push_instr {
     };
 }
 
-impl<'a> Night<'a> {
-    pub fn new(code: &str, tokens: Vec<LexTok<'a>>) -> Self {
+impl Night {
+    pub fn new(code: &str, tokens: Vec<LexTok>) -> Self {
         Self {
-            _code: code.into(),
+            input: code.into(),
             tokens: tokens.into_iter(),
             spans: vec![],
             instrs: VecDeque::new(),
@@ -84,7 +84,7 @@ impl<'a> Night<'a> {
 
     pub fn partial_new(instrs: impl Into<VecDeque<Instr>>, scope: Scope) -> Self {
         Self {
-            _code: "".into(),
+            input: "".into(),
             tokens: vec![].into_iter(),
             spans: Vec::new(),
             instrs: instrs.into(),
@@ -95,7 +95,7 @@ impl<'a> Night<'a> {
 
     pub fn clone_child(&self, instrs: impl Into<VecDeque<Instr>>) -> Self {
         Self {
-            _code: self._code.clone(),
+            input: self.input.clone(),
             tokens: vec![].into_iter(),
             spans: self.spans.clone(),
             instrs: instrs.into(),
@@ -108,12 +108,18 @@ impl<'a> Night<'a> {
         self.scope.clone()
     }
 
-    pub fn inject_code(&mut self, tokens: Vec<LexTok<'a>>) {
+    pub fn inject_code(&mut self, tokens: Vec<LexTok>) {
         let mut tokens = tokens.into_iter();
         std::mem::swap(&mut self.tokens, &mut tokens);
         self.init();
         self.exec();
         self.tokens = tokens;
+    }
+
+    #[inline]
+    fn span_between(&mut self, left: usize, right: usize) {
+        let span = Span::between(&self.spans[left], &self.spans[right]);
+        self.spans.push(span);
     }
 
     pub fn init(&mut self) {
@@ -176,11 +182,7 @@ impl<'a> Night<'a> {
                 let instr = self.instrs.pop_back().ok_or(NightError::Syntax(
                     "Singleton block statement missing preceeding instruction.".to_string(),
                 ))?;
-                let span = Span::between(
-                    &self.spans[self.spans.len() - 2],
-                    self.spans.last().unwrap(),
-                );
-                self.spans.push(span);
+                self.span_between(self.spans.len() - 2, self.spans.len() - 1);
                 push_instr!(Instr::PushFunc, Rc::new(SingleFunc::from(instr)), self)
             }
             _ => return night_err!(Unimplemented, format!("Token '{tok:?}'")),
@@ -191,6 +193,7 @@ impl<'a> Night<'a> {
 
     fn maybe_builtin(&self, tok: Token) -> Instr {
         if let Token::Symbol(s) = tok {
+            let s = s.as_ref();
             if let Some(&b) = BUILTIN_MAP.get(s) {
                 Instr::Internal(b, self.spans.len() - 1)
             } else if let Some(o) = Operator::from_name(s) {
@@ -217,10 +220,7 @@ impl<'a> Night<'a> {
                     let (start, span_start) = block_queue.pop().unwrap();
                     let span_end = self.spans.len() - 1;
                     let mut block = self.instrs.split_off(start);
-                    self.spans.push(Span::between(
-                        &self.spans[span_start],
-                        &self.spans[span_end],
-                    ));
+                    self.span_between(span_start, span_end);
 
                     // Add guard to function if it is specified
                     if guard.is_some() && block_queue.is_empty() {
@@ -242,10 +242,7 @@ impl<'a> Night<'a> {
         if block_queue.is_empty() {
             Ok(())
         } else {
-            self.spans.push(Span::between(
-                &self.spans[block_queue.pop().unwrap().1],
-                self.spans.last().unwrap(),
-            ));
+            self.span_between(block_queue.pop().unwrap().1, self.spans.len() - 1);
             night_err!(Syntax, "Unbalanced block.")
         }
     }
@@ -281,18 +278,13 @@ impl<'a> Night<'a> {
         }
 
         if start == Token::Newline {
-            let span = Span::between(
-                &self.spans[self.spans.len() - 2],
-                &self.spans.last().unwrap(),
-            );
-            self.spans.push(span);
+            self.span_between(self.spans.len() - 2, self.spans.len() - 1);
             return night_err!(Syntax, "Definition cannot start with a newline.");
         }
 
         // Const definition
         let is_const = start == Token::Pipe;
         let orig_len = self.instrs.len();
-
         if !is_const {
             self.spans.push(span);
             self.build_instr(start.clone())?;
@@ -302,6 +294,10 @@ impl<'a> Night<'a> {
         if start != Token::OpenCurly {
             self.parse_define_body(guard, def_span, orig_len, is_const)?;
         } else if !guard.is_empty() {
+            if is_const {
+                self.span_between(self.spans.len() - 2, self.spans.len() - 1);
+                return night_err!(Syntax, "Guarded definitions cannot be const.");
+            }
             if let Instr::PushFunc(f, s) = self.instrs.pop_back().unwrap() {
                 let mut instrs = Vec::with_capacity(f.len() + 2);
                 instrs.push(Instr::Guard(guard.clone(), self.spans.len() - 2));
@@ -330,6 +326,7 @@ impl<'a> Night<'a> {
             match tok {
                 Token::CloseParen => break,
                 Token::String(s) => {
+                    let s = s.as_ref();
                     if utils::is_one_word(s) {
                         guards.push(s.to_string());
                     } else {
@@ -346,10 +343,7 @@ impl<'a> Night<'a> {
                 "Guard expression should contain at least one word identifier."
             )
         } else {
-            self.spans.push(Span::between(
-                &self.spans[span_start],
-                self.spans.last().unwrap(),
-            ));
+            self.span_between(span_start, self.spans.len() - 1);
             Ok(guards)
         }
     }
@@ -392,10 +386,7 @@ impl<'a> Night<'a> {
         } else {
             let span_start = def[0].get_span();
             let span_end = def[def.len() - 1].get_span();
-            self.spans.push(Span::between(
-                &self.spans[span_start],
-                &self.spans[span_end],
-            ));
+            self.span_between(span_start, span_end);
 
             if !guard.is_empty() {
                 def.push_front(Instr::Guard(guard.clone(), span_start - 1));
@@ -553,7 +544,7 @@ impl Debug for Instr {
     }
 }
 
-impl<'a> Display for Night<'a> {
+impl Display for Night {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Night")
             .field("instrs", &self.instrs)

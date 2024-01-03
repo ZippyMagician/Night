@@ -23,7 +23,9 @@ impl StackVal {
 
     pub fn as_value(self) -> Status<Value> {
         match self {
-            Self::Function(_) => night_err!(UnsupportedType, "Expected literal value, got function"),
+            Self::Function(_) => {
+                night_err!(UnsupportedType, "Expected literal value, got function")
+            }
             Self::Value(v) => Ok(v),
         }
     }
@@ -192,10 +194,7 @@ impl ScopeInternal {
     pub fn pop_value(&mut self) -> Status<Value> {
         match self.stack.pop() {
             Some(StackVal::Value(v)) => Ok(v),
-            Some(_) => night_err!(
-                UnsupportedType,
-                "Expected literal value, found function."
-            ),
+            Some(_) => night_err!(UnsupportedType, "Expected literal value, found function."),
             _ => night_err!(NothingToPop),
         }
     }

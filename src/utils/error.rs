@@ -1,20 +1,21 @@
 use std::error::Error;
 use std::fmt::{self, Display};
 use std::num::{ParseFloatError, ParseIntError};
+use std::rc::Rc;
 
 #[derive(Clone, Debug)]
-pub struct Span<'a> {
-    code: &'a str,
+pub struct Span {
+    code: Rc<str>,
     start: usize,
     len: usize,
     line_start: usize,
     line_end: usize,
 }
 
-impl<'a> Span<'a> {
+impl Span {
     pub fn empty() -> Self {
         Self {
-            code: "",
+            code: "".into(),
             start: 0,
             len: 0,
             line_start: 0,
@@ -23,7 +24,7 @@ impl<'a> Span<'a> {
     }
 
     pub fn span(
-        code: &'a str,
+        code: Rc<str>,
         start: usize,
         len: usize,
         line_start: usize,
@@ -38,9 +39,9 @@ impl<'a> Span<'a> {
         }
     }
 
-    pub fn between(left: &Span<'a>, right: &Span<'a>) -> Self {
+    pub fn between(left: &Span, right: &Span) -> Self {
         Self {
-            code: left.code,
+            code: left.code.clone(),
             start: left.start,
             len: right.start.abs_diff(left.start + left.len) + left.len + right.len,
             line_start: std::cmp::min(left.line_start, right.line_start),
@@ -96,7 +97,7 @@ impl<'a> Span<'a> {
     }
 }
 
-impl<'a> Display for Span<'a> {
+impl Display for Span {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let (lefti, righti) = self.get_index();
         writeln!(
@@ -122,23 +123,23 @@ macro_rules! lex_err {
     ($msg:expr ; $code:expr, $start:expr, $len:expr, $line_start:expr => $line_end:expr) => {
         crate::utils::error::error(
             $msg,
-            crate::utils::error::Span::span($code, $start, $len, $line_start, $line_end),
+            crate::utils::error::Span::span($code.clone(), $start, $len, $line_start, $line_end),
         )
     };
 }
 
 pub(crate) use lex_err;
 
-pub fn error(msg: impl Display, span: Span<'_>) -> ! {
+pub fn error(msg: impl Display, span: Span) -> ! {
     println!("{msg} {span}");
     std::process::exit(-1)
 }
 
-pub fn warn(msg: impl Display, span: Span<'_>) {
+pub fn warn(msg: impl Display, span: Span) {
     println!("Warning: {msg} {span}")
 }
 
-pub fn error_with_trace(msg: impl Display, span: Span<'_>, trace: Vec<Span<'_>>) -> ! {
+pub fn error_with_trace(msg: impl Display, span: Span, trace: Vec<Span>) -> ! {
     println!("{msg} {span}");
     for s in trace {
         print!("Called from {s}");
