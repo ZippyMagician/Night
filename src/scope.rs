@@ -191,6 +191,17 @@ impl ScopeInternal {
         }
     }
 
+    pub fn pop2(&mut self) -> Status<(StackVal, StackVal)> {
+        let top = self.pop()?;
+        Ok((self.pop()?, top))
+    }
+
+    pub fn pop3(&mut self) -> Status<(StackVal, StackVal, StackVal)> {
+        let c = self.pop()?;
+        let b = self.pop()?;
+        Ok((self.pop()?, b, c))
+    }
+
     pub fn pop_value(&mut self) -> Status<Value> {
         match self.stack.pop() {
             Some(StackVal::Value(v)) => Ok(v),
@@ -201,6 +212,12 @@ impl ScopeInternal {
 
     pub fn push(&mut self, val: StackVal) {
         self.stack.push(val);
+    }
+
+    pub fn push_all<const C: usize>(&mut self, vals: [StackVal; C]) {
+        for val in vals {
+            self.stack.push(val);
+        }
     }
 
     pub fn push_value(&mut self, val: Value) {

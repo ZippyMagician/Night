@@ -176,6 +176,10 @@ define_builtins! {
 
     "dup2" => (Builtin::Dup2, 4(2): dup2);
 
+    "dup3" => (Builtin::Dup3, 6(3): dup3);
+
+    "pick" => (Builtin::Pick, 4(3): pick);
+
     "and" => (Builtin::LogicalAnd, 1(2): logical_and);
 
     "or" => (Builtin::LogicalOr, 1(2): logical_or);
@@ -291,18 +295,15 @@ fn op_defr(scope: Scope) -> Status<StackVal> {
 
 fn op_swap(scope: Scope) -> Status {
     let mut s = scope.borrow_mut();
-    let right = s.pop()?;
-    let left = s.pop()?;
-    s.push(right);
-    s.push(left);
+    let (left, right) = s.pop2()?;
+    s.push_all([right, left]);
     Ok(())
 }
 
 fn op_dup(scope: Scope) -> Status {
     let mut s = scope.borrow_mut();
     let val = s.pop()?;
-    s.push(val.clone());
-    s.push(val);
+    s.push_all([val.clone(), val]);
     Ok(())
 }
 
@@ -350,11 +351,8 @@ fn undefr(scope: Scope, name: Value) -> Status {
 
 fn over(scope: Scope) -> Status {
     let mut s = scope.borrow_mut();
-    let top = s.pop()?;
-    let bottom = s.pop()?;
-    s.push(bottom.clone());
-    s.push(top);
-    s.push(bottom);
+    let (bottom, top) = s.pop2()?;
+    s.push_all([bottom.clone(), top, bottom]);
     Ok(())
 }
 
@@ -370,41 +368,43 @@ fn rotr(scope: Scope) -> Status {
 
 fn dup_dip(scope: Scope) -> Status {
     let mut s = scope.borrow_mut();
-    let top = s.pop()?;
-    let x = s.pop()?;
-    s.push(x.clone());
-    s.push(x);
-    s.push(top);
+    let (x, top) = s.pop2()?;
+    s.push_all([x.clone(), x, top]);
     Ok(())
 }
 
 fn swap_dip(scope: Scope) -> Status {
     let mut s = scope.borrow_mut();
-    let top = s.pop()?;
-    let right = s.pop()?;
-    let left = s.pop()?;
-    s.push(right);
-    s.push(left);
-    s.push(top);
+    let (left, right, top) = s.pop3()?;
+    s.push_all([right, left, top]);
     Ok(())
 }
 
 fn pop_dip(scope: Scope) -> Status {
     let mut s = scope.borrow_mut();
-    let top = s.pop()?;
-    s.pop()?;
+    let (_, top) = s.pop2()?;
     s.push(top);
     Ok(())
 }
 
 fn dup2(scope: Scope) -> Status {
     let mut s = scope.borrow_mut();
-    let right = s.pop()?;
-    let left = s.pop()?;
-    s.push(left.clone());
-    s.push(right.clone());
-    s.push(left);
-    s.push(right);
+    let (left, right) = s.pop2()?;
+    s.push_all([left.clone(), right.clone(), left, right]);
+    Ok(())
+}
+
+fn dup3(scope: Scope) -> Status {
+    let mut s = scope.borrow_mut();
+    let (a, b, c) = s.pop3()?;
+    s.push_all([a.clone(), b.clone(), c.clone(), a, b, c]);
+    Ok(())
+}
+
+fn pick(scope: Scope) -> Status {
+    let mut s = scope.borrow_mut();
+    let (a, b, c) = s.pop3()?;
+    s.push_all([a.clone(), b, c, a]);
     Ok(())
 }
 
@@ -442,18 +442,20 @@ fn cast_to_float(_: Scope, value: Value) -> Status<Value> {
 
 fn curry(scope: Scope) -> Status {
     let mut s = scope.borrow_mut();
-    let block = s.pop()?.as_fn()?;
-    let op = s.pop()?;
-    s.push(StackVal::Function(Rc::new(CurriedFunc::new(op, block))));
+    let (op, block) = s.pop2()?;
+    s.push(StackVal::Function(Rc::new(CurriedFunc::new(
+        op,
+        block.as_fn()?,
+    ))));
     Ok(())
 }
 
 fn bind(scope: Scope) -> Status {
     let mut s = scope.borrow_mut();
-    let block2 = s.pop()?.as_fn()?;
-    let block1 = s.pop()?.as_fn()?;
+    let (block1, block2) = s.pop2()?;
     s.push(StackVal::Function(Rc::new(ComposedFunc::new(
-        block1, block2,
+        block1.as_fn()?,
+        block2.as_fn()?,
     ))));
     Ok(())
 }

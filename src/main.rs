@@ -35,12 +35,18 @@ fn main() {
     "#;*/
 
     const TEST: &'static str = r#"
-    -> ASSERT_EQ = "PASS" "FAIL" choose print
-
     -> fib { 0 1 } dip { +@ ;@ bi2 } loop ;
     3 4 +@ *@ bi2
     5 3 { 0 : - } dec@ fork
-    10 fib 55 ASSERT_EQ
+    10 fib 55 = "pass" "fail" choose
+
+    -> each_integer_from {
+        over2 <
+        { { nip ? } keep3 inc@ dip2 each_integer_from }
+        { ; ; ; } if 
+    }
+    -> times ;@ : bind 0@ dip2 each_integer_from
+    10 5 { 2 * } times
     "#;
 
     let mut lex = Lexer::new(TEST);
@@ -50,16 +56,20 @@ fn main() {
     utils::define_fns(
         &mut night,
         r#"
+        -> nrot 1 - {} { { dip : } curry } swpd loop ?
+        -> over2 pick pick
         -> dip (:top) : :top ! ; :top | ? $top
         -> dip2 : dip@ dip
+        -> dip3 : dip2@ dip
         -> keep over ?@ dip
         -> keep2 dup2@ dip dip2
+        -> keep3 dup3@ dip dip3
         -> bi keep@ dip ?
         -> bi2 keep2@ dip ?
         -> fork dip@ dip ?
         -> fork2 dip2@ dip ?
         -> when : ?@ ;@ if
-        -> choose rot ;@ nip@ if
+        -> choose 3 nrot ;@ nip@ if
         "#,
     );
 

@@ -60,6 +60,10 @@ pub enum Builtin {
     Popd,
     /// dup2 ( a b -- a b a b )
     Dup2,
+    /// dup3 ( a b c -- a b c a b c )
+    Dup3,
+    /// pick ( a b c -- a b c a )
+    Pick,
 
     // Functions
     /// Pop top value, print to stdout ( a --  )
