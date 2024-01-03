@@ -45,6 +45,23 @@ pub enum Operator {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(C)]
 pub enum Builtin {
+    // Stack operations
+    /// over ( a b -- a b a )
+    Over,
+    /// rot ( a b c -- b c a )
+    Rot,
+    /// rotr ( a b c -- c a b )
+    RotRight,
+    /// dupd ( a b -- a a b )
+    Dupd,
+    /// swpd ( a b c -- b a c )
+    Swapd,
+    /// nip ( a b -- b )
+    Popd,
+    /// dup2 ( a b -- a b a b )
+    Dup2,
+
+    // Functions
     /// Pop top value, print to stdout ( a --  )
     Print,
     /// Increment top value by 1 ( a -- a+1 )
@@ -61,12 +78,6 @@ pub enum Builtin {
     Loop,
     /// cond <function> if -> call function if cond is truthy ( cond f --  )
     If,
-    /// over ( a b -- a b a )
-    Over,
-    /// rot ( a b c -- b c a )
-    Rot,
-    /// rotr ( a b c -- c a b )
-    RotRight,
     /// Logical or of two values ( a b -- a )
     LogicalOr,
     /// Logical and of two values ( a b -- a )
@@ -79,6 +90,8 @@ pub enum Builtin {
     CastToInt,
     /// f32 ( num -- f32 )
     CastToFloat,
+
+    // Built-in combinators
     /// curry ( op f -- { op ...f } )
     Curry,
     /// bind ( f1 f2 -- { ...f1 ...f2 } )

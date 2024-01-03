@@ -168,6 +168,14 @@ define_builtins! {
 
     "rotr" => (Builtin::RotRight, 0(0): rotr);
 
+    "dupd" => (Builtin::Dupd, 3(2): dup_dip);
+
+    "swpd" => (Builtin::Swapd, 3(3): swap_dip);
+
+    "nip" => (Builtin::Popd, 1(2): pop_dip);
+
+    "dup2" => (Builtin::Dup2, 4(2): dup2);
+
     "and" => (Builtin::LogicalAnd, 1(2): logical_and);
 
     "or" => (Builtin::LogicalOr, 1(2): logical_or);
@@ -357,6 +365,42 @@ fn rot(scope: Scope) -> Status {
 
 fn rotr(scope: Scope) -> Status {
     scope.borrow_mut().raw_stack().rotate_right(1);
+    Ok(())
+}
+
+fn dup_dip(scope: Scope) -> Status {
+    let mut s = scope.borrow_mut();
+    let top = s.pop()?;
+    let x = s.pop()?;
+    s.push(x.clone());
+    s.push(x);
+    s.push(top);
+    Ok(())
+}
+
+fn swap_dip(scope: Scope) -> Status {
+    let mut s = scope.borrow_mut();
+    let top = s.pop()?;
+    let right = s.pop()?;
+    let left = s.pop()?;
+    s.push(right);
+    s.push(left);
+    s.push(top);
+    Ok(())
+}
+
+fn pop_dip(_: Scope, left: Value, _: Value) -> Status<Value> {
+    Ok(left)
+}
+
+fn dup2(scope: Scope) -> Status {
+    let mut s = scope.borrow_mut();
+    let right = s.pop()?;
+    let left = s.pop()?;
+    s.push(left.clone());
+    s.push(right.clone());
+    s.push(left);
+    s.push(right);
     Ok(())
 }
 

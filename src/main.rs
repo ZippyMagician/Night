@@ -46,7 +46,6 @@ fn main() {
     utils::define_fns(
         &mut night,
         r#"
-        -> dup2 over over
         -> dip (:top) : :top ! ; :top | ? $top
         -> dip2 : dip@ dip
         -> keep over ?@ dip
