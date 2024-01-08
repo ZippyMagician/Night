@@ -40,13 +40,12 @@ fn main() {
     5 3 { 0 : - } dec@ fork
     10 fib 55 = "pass" "fail" choose
 
-    -> each_integer_from {
+    -> for_range {
         over2 <
-        { { nip ? } keep3 inc@ dip2 each_integer_from }
-        pop3@ if 
+        { (:I) { { ; :I ! ; } dip ? } keep3 inc@ dip2 for_range }
+        pop3@ if
     }
-    -> times ;@ : bind 0@ dip2 each_integer_from
-    10 5 { 2 * } times
+    1 11 { $I 2 * } for_range
     "#;
 
     let mut lex = Lexer::new(TEST);
@@ -69,6 +68,7 @@ fn main() {
         -> fork dip@ dip ?
         -> fork2 dip2@ dip ?
         -> when : ?@ ;@ if
+        -> unless : ;@ ?@ if
         -> choose 3 rotn ;@ nip@ if
         "#,
     );
