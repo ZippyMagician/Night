@@ -30,8 +30,6 @@ pub enum Operator {
     LessEq,
     /// 1 ~ -- 0
     Not,
-    /// 6 :tmp ! -- 6, [$tmp = 6]
-    Assign,
     /// 5 4 6 ; -- 5 4
     Pop,
     /// 3 2 : -- 2 3
@@ -82,10 +80,6 @@ pub enum Builtin {
     Undef,
     /// (temp) symbol / register undefinition
     UndefReg,
-    /// n <function> loop -> call function n times ( n f --  )
-    Loop,
-    /// cond <function> when -> call function if cond is truthy ( cond f --  )
-    If,
     /// Logical or of two values ( a b -- a )
     LogicalOr,
     /// Logical and of two values ( a b -- a )
@@ -104,4 +98,24 @@ pub enum Builtin {
     Curry,
     /// bind ( f1 f2 -- { ...f1 ...f2 } )
     Bind,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(C)]
+pub enum Intrinsic {
+    Call,
+    Loop,
+    If,
+    DefineRegister,
+}
+
+impl Intrinsic {
+    pub fn from_name(name: impl AsRef<str>) -> Option<Self> {
+        match name.as_ref() {
+            "call" => Some(Self::Call),
+            "loop" => Some(Self::Loop),
+            "if" => Some(Self::If),
+            _ => None,
+        }
+    }
 }

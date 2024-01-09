@@ -14,6 +14,7 @@ Note for future: Currently there is no way for builtins and operators to efficie
 - [x] Blocks
 - [x] Symbol definitions
 - [x] Register definitions
+- [ ] Mutable scoped registers
 - [x] Guard statements
 - [x] Fully decide how arrays will work
 - [ ] Implement basic array support
@@ -78,6 +79,19 @@ will work too.
 > 
 > Finally, this change would warrant a look at `undef` (and also possibly `undefr`) to see how that will be handled.
 
+Implemented as follows:
+
+```ruby
+-> dip (:top) : :top ! ; :top | ? $top
+```
+is now
+```ruby
+-> dip (top) : $top! :top | ? $top
+```
+This makes it apparent when a register is being defined vs. pushed while also cleaning up messiness. As of now, `def` is staying, as is `undefr` and `undef`, all of which take string arguments. At some point `def` will probably be changed, although there isn't really a need for inline variable definition as registers exist.
+
+However, allowing for mutable scoped registers at some point will most likely be important.
+
 #### Other
 - Complex number support
 - More math builtins
@@ -89,37 +103,19 @@ will work too.
 -> x| 4 7 +
 x x * print
 
--> mults  (:a) :a ! ; 11 1 range { $a $I + } for
--> mults2 (:a) :a ! 9 { . $a + } loop
+-> mults  (a) $a! 1 11 range { $a $I + } for
+-> mults2 (a) . $a! 9 { . $a + } loop
 7 mults
 
--> dip (:top) : :top ! ; :top | ? $top
--> for (:for_f) {
-	:for_f ! ; . len
-	(:for_r :I) {
-		. first : 1 drop :for_r ! ; :I ! ;
+-> dip (top) : $top! :top | ? $top
+-> for (for_f) {
+	$for_f! . len
+	(for_r I) {
+		. first : 1 drop $for_r! $I!
 		$for_f [:for_f :for_r] | ? $for_r
 	} loop
 }
 ```
-
-## Some Definitions
-May change once implemented.
-| Function | Symbol | Def |
-| -- | -- | -- |
-| `pop` | `;` | Pop top value from stack |
-| `dup` | `.` | Duplicate top value of stack |
-| `defr` | `!` | Assign value to temp register |
-| `undefr` | | Unassign value from temp register. Generally not specifically called |
-| `join` | `,` | Joins top two values from stack into array |
-| `I` | | Intermediary op dependent on function |
-| `call` | `?` | Call function on top of stack |
-| `def` |  | Assign value to variable symbol |
-| `undef` |  | Unassign value from variable symbol, push value to stack |
-| `for` |  | See below |
-| `dip` | `_` | See below |
-| `const` | `\|` | Specifies a symbol definition as a constant value |
-`add`, `sub`, `mul`, `div`, `mod`, `eq`, `ne`, `gt`, `ge`, `lt`, `le`
 
 ## Parsing
 ```
@@ -135,6 +131,6 @@ May change once implemented.
 -> x | y ⇒   y :x def
 :x | <instr>       ⇒ Block register x from being access for the duration of the next instr
 [:x :y] | <instr>  ⇒ Block register[s] x & y from being accessed for the duration of the next instr
--> x (:word :list) { y } ⇒ Specify temp words to unassign after. Acts as guard on registers.
+-> x (word list) { y } ⇒ Specify temp words to unassign after. Acts as guard on registers.
 -- ⇒ comment
 ```

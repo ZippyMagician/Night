@@ -11,7 +11,7 @@
 
 -- dip ( x block -- x )
 -- Pops x from the stack, calls the block, then pushes x
--> dip (:top) : :top ! ; :top | ? $top
+-> dip (top) : $top! :top | ? $top
 
 -- dip2 ( x y block -- x y )
 -- Pops x and y from the stack, calls the block, then pushes x and y back

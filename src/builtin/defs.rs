@@ -136,8 +136,6 @@ define_ops! {
 
     "~" => (Operator::Not, "not", 1(1): op_not);
 
-    "!" => (Operator::Assign, "defr", 1(0): op_defr);
-
     ";" => (Operator::Pop, "pop", 0(0): op_pop);
 
     ":" => (Operator::Swap, "swp", 2(2): op_swap);
@@ -199,14 +197,6 @@ define_builtins! {
     "curry" => (Builtin::Curry, 0(0): curry);
 
     "bind" => (Builtin::Bind, 0(0): bind);
-
-    "loop" => (Builtin::Loop, 0(0): |_| {
-        night_err!(ContextFail, "An internal error occurred, this should not have been called.")
-    });
-
-    "if" => (Builtin::If, 0(0): |_| {
-        night_err!(ContextFail, "An internal error occurred, this should not have been called.")
-    });
 }
 
 fn op_add(_: Scope, left: Value, right: Value) -> Status<Value> {
@@ -288,13 +278,6 @@ fn op_not(_: Scope, value: Value) -> Status<Value> {
 fn op_pop(scope: Scope) -> Status {
     scope.borrow_mut().pop()?;
     Ok(())
-}
-
-fn op_defr(scope: Scope) -> Status<StackVal> {
-    let mut s = scope.borrow_mut();
-    let name = s.pop_value()?.as_str()?;
-    let value = s.pop()?;
-    s.def_reg(name, value)
 }
 
 fn op_swap(scope: Scope) -> Status {

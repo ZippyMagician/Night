@@ -4,10 +4,9 @@ use std::fmt::{self, Debug, Display};
 use std::rc::Rc;
 use std::vec::IntoIter;
 
-use crate::builtin::{Builtin, Operator, BUILTIN_MAP};
+use crate::builtin::{Builtin, Intrinsic as Intr, Operator, BUILTIN_MAP};
 use crate::lexer::{LexTok, Token};
 use crate::scope::{Scope, ScopeInternal, StackVal};
-use crate::utils;
 use crate::utils::error::{self, night_err, NightError, Span, Status};
 use crate::utils::function::{BlockFunc, Generable, SingleFunc};
 use crate::value::Value;
@@ -19,7 +18,7 @@ pub enum Instr {
     PushSym(String, bool, usize),
     Op(Operator, usize),
     Internal(Builtin, usize),
-    Call(usize),
+    Intrinsic(Intr, usize),
     Guard(Vec<String>, usize),
     GuardEnd(Vec<String>, usize),
     Block(Vec<String>, usize),
@@ -35,7 +34,7 @@ impl Instr {
             Instr::PushSym(_, _, s) => *s,
             Instr::Op(_, s) => *s,
             Instr::Internal(_, s) => *s,
-            Instr::Call(s) => *s,
+            Instr::Intrinsic(_, s) => *s,
             Instr::Guard(_, s) => *s,
             Instr::GuardEnd(_, s) => *s,
             Instr::Block(_, s) => *s,
@@ -143,7 +142,7 @@ impl Night {
             }
             Token::String(s) => push_instr!(Instr::Push, Value::from(s.to_string()), self),
             Token::Register(s) => push_instr!(Instr::PushSym, s.to_string(), true, self),
-            Token::Op(Operator::Call) => self.instrs.push_back(Instr::Call(self.spans.len() - 1)),
+            Token::Op(Operator::Call) => push_instr!(Instr::Intrinsic, Intr::Call, self),
             Token::Op(o) => push_instr!(Instr::Op, o, self),
             Token::OpenParen => {
                 let guard = self.parse_guard()?;
@@ -158,11 +157,19 @@ impl Night {
             Token::CloseParen => return night_err!(Syntax, "Unbalanced parenthesis."),
             Token::OpenCurly => self.parse_block(None)?,
             Token::CloseCurly => return night_err!(Syntax, "Unbalanced block."),
-            Token::Define => {
+            Token::DefineSym => {
                 if self.spans.len() > 1 && self.spans[self.spans.len() - 2].as_lit() != b"\n" {
                     return night_err!(Syntax, "Definition must begin at the start of a line.");
                 }
                 self.parse_define()?
+            }
+            Token::Exclamation => {
+                if let Some(Instr::PushSym(reg, true, span)) = self.instrs.pop_back() {
+                    push_instr!(Instr::Intrinsic, Intr::DefineRegister, self);
+                    self.instrs.push_back(Instr::PushSym(reg, true, span))
+                } else {
+                    return night_err!(Syntax, "The '!' token must follow a valid register.");
+                }
             }
             Token::Symbol(_) => self.instrs.push_back(self.maybe_builtin(tok)),
             Token::Newline | Token::EOF => {} // skip
@@ -194,7 +201,9 @@ impl Night {
     fn maybe_builtin(&self, tok: Token) -> Instr {
         if let Token::Symbol(s) = tok {
             let s = s.as_ref();
-            if let Some(&b) = BUILTIN_MAP.get(s) {
+            if let Some(i) = Intr::from_name(s) {
+                Instr::Intrinsic(i, self.spans.len() - 1)
+            } else if let Some(&b) = BUILTIN_MAP.get(s) {
                 Instr::Internal(b, self.spans.len() - 1)
             } else if let Some(o) = Operator::from_name(s) {
                 Instr::Op(o, self.spans.len() - 1)
@@ -311,15 +320,11 @@ impl Night {
             self.spans.push(span);
             match tok {
                 Token::CloseParen => break,
-                Token::String(s) => {
+                Token::Symbol(s) => {
                     let s = s.as_ref();
-                    if utils::is_one_word(s) {
-                        guards.push(s.to_string());
-                    } else {
-                        return night_err!(Syntax, "Expected single word identifier.");
-                    }
+                    guards.push(s.to_string());
                 }
-                _ => return night_err!(Syntax, "Expected single word identifier."),
+                _ => return night_err!(Syntax, "Expected literal identifier."),
             }
         }
 
@@ -455,10 +460,8 @@ impl Night {
                 s.push(value)
             }
             PushFunc(f, _) => self.scope.borrow_mut().push(StackVal::Function(f)),
-            Call(i) => self.exec_op_call(i)?,
+            Intrinsic(intr, i) => self.exec_intrinsic(intr, i)?, 
             Op(o, _) => o.call(self.scope.clone())?,
-            Internal(Builtin::Loop, i) => self.exec_builtin_loop(i)?,
-            Internal(Builtin::If, i) => self.exec_builtin_if(i)?,
             Internal(b, _) => b.call(self.scope.clone())?,
             Guard(guard, _) => {
                 let mut s = self.scope.borrow_mut();
@@ -496,17 +499,26 @@ impl Night {
         Ok(())
     }
 
-    fn exec_op_call(&mut self, from: usize) -> Status {
+    fn exec_intrinsic(&mut self, intr: Intr, from: usize) -> Status {
+        match intr {
+            Intr::Call => self.exec_intr_call(from),
+            Intr::If => self.exec_intr_if(from),
+            Intr::Loop => self.exec_intr_loop(from),
+            Intr::DefineRegister => self.exec_intr_defr(from),
+        }
+    }
+
+    fn exec_intr_call(&mut self, from: usize) -> Status {
         let scope = self.scope.clone();
         let def = scope.borrow_mut().pop()?.as_fn()?;
         self.exec_fn(def.gen_instrs(from), from);
         Ok(())
     }
 
-    // This can be implemented as a fn instead of a builtin at this point.
+    // This can be implemented as a fn instead of an intrinsic at this point.
     // See Factor's implementation of `times`, the `night` version can be implemented
     // with the same logic.
-    fn exec_builtin_loop(&mut self, from: usize) -> Status {
+    fn exec_intr_loop(&mut self, from: usize) -> Status {
         let mut s = self.scope.borrow_mut();
         let def = s.pop()?.as_fn()?;
         let count = s.pop_value()?.as_int()?;
@@ -521,7 +533,7 @@ impl Night {
         Ok(())
     }
 
-    fn exec_builtin_if(&mut self, from: usize) -> Status {
+    fn exec_intr_if(&mut self, from: usize) -> Status {
         let mut s = self.scope.borrow_mut();
         let false_def = s.pop()?.as_fn()?;
         let true_def = s.pop()?.as_fn()?;
@@ -534,6 +546,21 @@ impl Night {
         }
         Ok(())
     }
+
+    fn exec_intr_defr(&mut self, defr_span: usize) -> Status {
+        let scope = self.scope.clone();
+        let mut s = scope.borrow_mut();
+        if let Some(Instr::PushSym(reg, true, reg_span)) = self.instrs.pop_front() {
+            self.span_between(reg_span, defr_span);
+            let between = self.spans.len() - 1;
+            self.spans.swap(defr_span, between);
+            let top = s.pop()?;
+            s.def_reg(reg, top)?;
+            Ok(())
+        } else {
+            unreachable!()
+        }
+    }
 }
 
 impl Debug for Instr {
@@ -544,8 +571,8 @@ impl Debug for Instr {
             Instr::PushSym(s, false, _) => write!(f, "Exec({s})"),
             Instr::PushSym(s, true, _) => write!(f, "Push(${s})"),
             Instr::Op(o, _) => write!(f, "{o:?}"),
-            Instr::Call(_) => write!(f, "Operator::Call"),
             Instr::Internal(b, _) => write!(f, "{b:?}"),
+            Instr::Intrinsic(i, _) => write!(f, "Intrinsic({i:?}"),
             Instr::Guard(syms, _) => write!(f, "<guard: {syms:?}>"),
             Instr::GuardEnd(syms, _) => write!(f, "<guard_end: {syms:?}>"),
             Instr::Block(syms, _) => write!(f, "<block: {syms:?}>"),

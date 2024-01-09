@@ -42,13 +42,13 @@ fn main() {
 
     -> for_range {
         over2 <
-        { (:I) { { ; :I ! ; } dip ? } keep3 inc@ dip2 for_range }
+        { (I) { { ; $I! } dip ? } keep3 inc@ dip2 for_range }
         pop3@ if
     }
     1 11 { $I 2 * } for_range
     "#;
 
-    let mut lex = Lexer::new(TEST);
+    let lex = Lexer::new(TEST);
     let tokens = lex.tokenize();
     let mut night = Night::new(TEST, tokens.clone());
 
@@ -57,7 +57,7 @@ fn main() {
         r#"
         -> rotn 1 - {} { { dip : } curry } swpd loop ?
         -> over2 pick pick
-        -> dip (:top) : :top ! ; :top | ? $top
+        -> dip (top) : $top! :top | ? $top
         -> dip2 : dip@ dip
         -> dip3 : dip2@ dip
         -> keep over ?@ dip

@@ -24,7 +24,9 @@ pub enum Token {
     /// EOF
     EOF,
     /// `->`
-    Define,
+    DefineSym,
+    /// `!`
+    Exclamation,
     /// `|`
     Pipe,
     /// `{`
@@ -49,6 +51,7 @@ pub struct Lexer<'a> {
     input: Rc<str>,
     chars: Peekable<CharIndices<'a>>,
     line: usize,
+    tokens: Vec<LexTok>,
 }
 
 /// Shorthand for writing out Some((tok, Span::span(/* ... */)))
@@ -77,6 +80,7 @@ impl<'a> Lexer<'a> {
             input: input.into(),
             chars: input.char_indices().peekable(),
             line: 0,
+            tokens: Vec::new(),
         }
     }
 
@@ -86,13 +90,12 @@ impl<'a> Lexer<'a> {
     }
 
     /// Entry function for tokenization
-    pub fn tokenize(&mut self) -> Vec<LexTok> {
-        let mut tokens = Vec::new();
+    pub fn tokenize(mut self) -> Vec<LexTok> {
         while let Some(tok) = self.consume_token() {
-            tokens.push(tok);
+            self.tokens.push(tok);
         }
 
-        tokens.push((
+        self.tokens.push((
             Token::EOF,
             Span::span(
                 self.input.clone(),
@@ -102,7 +105,8 @@ impl<'a> Lexer<'a> {
                 self.line,
             ),
         ));
-        tokens
+
+        self.tokens
     }
 
     #[inline]
@@ -110,7 +114,7 @@ impl<'a> Lexer<'a> {
         let (start, chr) = self.chars.next()?;
         match chr {
             '0'..='9' => self.consume_number(start),
-            'a'..='z' | 'A'..='Z' => self.consume_symbol(start),
+            '_' | 'a'..='z' | 'A'..='Z' => self.consume_symbol(start),
             c if c.is_whitespace() => self.consume_whitespace(c, start),
             c if c.is_ascii_punctuation() => self.maybe_op(c, start),
             _ => {
@@ -123,7 +127,7 @@ impl<'a> Lexer<'a> {
         if chr == '-' && self.next_if(|c| c == '-').is_some() {
             return self.skip_comment();
         } else if chr == '-' && self.next_if(|c| c == '>').is_some() {
-            return lex_tok!(Token::Define, self, start, 2, 0);
+            return lex_tok!(Token::DefineSym, self, start, 2, 0);
         } else if chr == '-' && self.next_if(|c| c.is_ascii_digit()).is_some() {
             return self.consume_number(start);
         // This uses `peek` instead of `next_if` in order to avoid issues with the 1st char of the word being consumed before `calculate_var_bounds` is called.
@@ -140,6 +144,7 @@ impl<'a> Lexer<'a> {
             '\'' => self.consume_char_lit(start),
             '$' => self.consume_register(start),
             '"' => self.consume_string(start),
+            '!' => lex_tok!(Token::Exclamation, self, start, 1, 0),
             '@' => lex_tok!(Token::AtSign, self, start, 1, 0),
             '|' => lex_tok!(Token::Pipe, self, start, 1, 0),
             '[' => lex_tok!(Token::OpenBracket, self, start, 1, 0),
@@ -198,6 +203,7 @@ impl<'a> Lexer<'a> {
         if end - start == 1 {
             lex_err!("LexError: Missing identifier for register."; self.input, start, 1, self.line => self.line);
         }
+        
         lex_tok!(Token::Register, start + 1, end, self, start, end - start, 0)
     }
 
