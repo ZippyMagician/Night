@@ -1,0 +1,30 @@
+-- Control flow functions
+
+-- bi ( x p: ( x -- ..a ) q: ( x -- ..b ) -- ..a ..b )
+-- Applies the two blocks p and q on the value x
+-- Equivalent to `. p : q`
+-> bi keep@ dip ?
+
+-- bi2 ( x y p: ( x y -- ..a ) q: ( x y -- ..b ) -- ..a ..b )
+-- Applies the two blocks p and q on the values x and y
+-> bi2 keep2@ dip ?
+
+-- fork ( x y p: ( x -- ..a ) q: ( y -- ..b ) -- ..a ..b )
+-- Applies the block p to the value x, then applies the block q to the value y
+-> fork dip@ dip ?
+
+-- fork2 ( w x y z p: ( w x -- ..a ) q: ( y z -- ..b ) -- ..a ..b )
+-- Applies the block p to the values w and x, then applies the block q to the values y and z
+-> fork2 dip2@ dip ?
+
+-- when ( ..a ? block: ( ..a -- ..b ) -- ..a/..b )
+-- Calls block if condition ? is T
+-> when : ?@ ;@ if
+
+-- unless ( ..a ? block: ( ..a -- ..b ) -- ..a/..b )
+-- Calls block if condition ? is F
+-> unless : ;@ ?@ if
+
+-- choose ( ..a ? x y -- x/y )
+-- Preserves x if condition ? is T, otherwise preserves y
+-> choose 3 rotn ;@ nip@ if

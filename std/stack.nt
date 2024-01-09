@@ -1,0 +1,34 @@
+-- Stack shuffling functions
+
+-- rotn ( n -- )
+-- Rotates the top n values of the stack to the left
+-- 2 rotn is equiv to swp
+-> rotn 1 - {} { { dip : } curry } swpd loop ?
+
+-- over2 ( x y z -- x y z x y )
+-- The over builtin with a depth of 2, equivalent to two adjacent calls to pick.
+-> over2 pick pick
+
+-- dip ( x block -- x )
+-- Pops x from the stack, calls the block, then pushes x
+-> dip (:top) : :top ! ; :top | ? $top
+
+-- dip2 ( x y block -- x y )
+-- Pops x and y from the stack, calls the block, then pushes x and y back
+-> dip2 : dip@ dip
+
+-- dip3 ( x y z block -- x y z )
+-- Pops x, y, and z from the stack, calls the block, then pushes x, y, and z back
+-> dip3 : dip2@ dip
+
+-- keep ( ..a x block: ( ..a x -- ..b ) -- ..b x )
+-- Calls block with the value on the stack, and restores that top value afterwards
+-> keep over ?@ dip
+
+-- keep2 ( ..a x y block: ( ..a x y -- ..b ) -- ..b x y )
+-- Calls block with the values on the stack, and restores those 2 top values afterwards
+-> keep2 dup2@ dip dip2
+
+-- keep3 ( ..a x y z block: ( ..a x y z -- ..b ) -- ..b x y z )
+-- Calls block the the values on the stack, and restores those 3 top values afterwards
+-> keep3 dup3@ dip dip3
