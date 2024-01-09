@@ -34,7 +34,7 @@ impl StackVal {
 impl Display for StackVal {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Function(def) => write!(f, "<function>: {:?}", def.gen_instrs(0)),
+            Self::Function(_) => write!(f, "<function>"),
             Self::Value(v) => write!(f, "{v}"),
         }
     }
@@ -139,6 +139,16 @@ impl ScopeInternal {
         if !self.register_trace.contains_key(&g) {
             self.register_trace.insert(g.clone(), RegTrace::new());
         }
+    }
+
+    pub fn dump_symbols(&self) {
+        println!("--- SYMBOL DMP: ---");
+        for (key, val) in &self.env {
+            if let SymbolType::Symbol(s) = key {
+                println!("{s}: {val}");
+            }
+        }
+        println!("---             ---");
     }
 
     // For now this returns a `Status`, as I might use it in the future.

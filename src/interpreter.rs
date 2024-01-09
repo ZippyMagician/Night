@@ -70,24 +70,13 @@ macro_rules! push_instr {
 }
 
 impl Night {
-    pub fn new(code: &str, tokens: Vec<LexTok>) -> Self {
-        Self {
-            input: code.into(),
-            tokens: tokens.into_iter(),
-            spans: vec![],
-            instrs: VecDeque::new(),
-            scope: Rc::new(RefCell::new(ScopeInternal::create())),
-            callback: vec![],
-        }
-    }
-
-    pub fn partial_new(instrs: impl Into<VecDeque<Instr>>, scope: Scope) -> Self {
+    pub fn new() -> Self {
         Self {
             input: "".into(),
             tokens: vec![].into_iter(),
-            spans: Vec::new(),
-            instrs: instrs.into(),
-            scope,
+            spans: vec![],
+            instrs: VecDeque::new(),
+            scope: Rc::new(RefCell::new(ScopeInternal::create())),
             callback: vec![],
         }
     }
@@ -101,6 +90,12 @@ impl Night {
             scope: Rc::new(RefCell::new(self.scope.borrow().to_owned().clone())),
             callback: vec![],
         }
+    }
+
+    pub fn push_new_code(&mut self, code: &str, tokens: Vec<LexTok>) {
+        self.input = code.into();
+        self.tokens = tokens.into_iter();
+        self.init();
     }
 
     pub fn get_scope(&self) -> Scope {
@@ -135,9 +130,9 @@ impl Night {
         match tok {
             Token::Number(n) => {
                 if n.contains('.') {
-                    push_instr!(Instr::Push, Value::from(n.parse::<f32>()?), self)
+                    push_instr!(Instr::Push, Value::from(n.parse::<f64>()?), self)
                 } else {
-                    push_instr!(Instr::Push, Value::from(n.parse::<i32>()?), self)
+                    push_instr!(Instr::Push, Value::from(n.parse::<i64>()?), self)
                 }
             }
             Token::String(s) => push_instr!(Instr::Push, Value::from(s.to_string()), self),
@@ -500,11 +495,20 @@ impl Night {
     }
 
     fn exec_intrinsic(&mut self, intr: Intr, from: usize) -> Status {
+        let scope = self.scope.clone();
         match intr {
             Intr::Call => self.exec_intr_call(from),
             Intr::If => self.exec_intr_if(from),
             Intr::Loop => self.exec_intr_loop(from),
             Intr::DefineRegister => self.exec_intr_defr(from),
+            Intr::StackDump => {
+                println!("--- STACK DMP: ---\n{}\n---            ---", scope.borrow());
+                Ok(())
+            }
+            Intr::SymDump => {
+                scope.borrow().dump_symbols();
+                Ok(())
+            }
         }
     }
 

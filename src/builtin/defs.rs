@@ -190,9 +190,9 @@ define_builtins! {
 
     "ceil" => (Builtin::Ceil, 1(1): ceil);
 
-    "i32" => (Builtin::CastToInt, 1(1): cast_to_int);
+    "i64" => (Builtin::CastToInt, 1(1): cast_to_int);
 
-    "f32" => (Builtin::CastToFloat, 1(1): cast_to_float);
+    "f64" => (Builtin::CastToFloat, 1(1): cast_to_float);
 
     "curry" => (Builtin::Curry, 0(0): curry);
 

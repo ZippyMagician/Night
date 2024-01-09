@@ -1,5 +1,7 @@
+use std::io::{self, Write};
+
 use night::interpreter::Night;
-use night::lexer::{Lexer, Token};
+use night::lexer::Lexer;
 use night::utils;
 
 fn main() {
@@ -34,7 +36,7 @@ fn main() {
     0 1 and@ not@ bind ? -- 1
     "#;*/
 
-    const TEST: &'static str = r#"
+    /*const TEST: &'static str = r#"
     -> fib { 0 1 } dip { +@ ;@ bi2 } loop ;
     3 4 +@ *@ bi2
     5 3 { 0 : - } dec@ fork
@@ -46,12 +48,10 @@ fn main() {
         pop3@ if
     }
     1 11 { $I 2 * } for_range
-    "#;
+    "#;*/
 
-    let lex = Lexer::new(TEST);
-    let tokens = lex.tokenize();
-    let mut night = Night::new(TEST, tokens.clone());
-
+    println!("Night CLI. Use `halt` to terminate.");
+    let mut night = Night::new();
     utils::define_fns(
         &mut night,
         r#"
@@ -73,14 +73,24 @@ fn main() {
         "#,
     );
 
-    println!(
-        "{:?}\n---",
-        tokens.into_iter().map(|(n, _)| n).collect::<Vec<Token>>()
-    );
+    let mut input;
+    loop {
+        print!(">> ");
+        io::stdout().flush().unwrap();
 
-    night.init();
-    println!("{night}\n---");
+        input = String::new();
+        io::stdin().read_line(&mut input)
+            .expect("Error reading line");
 
-    night.exec();
-    print!("Stack:\n{}", night.get_scope().borrow());
+        match input.as_ref() {
+            "halt\n" => break,
+            line => {
+                let lex = Lexer::new(line);
+                night.push_new_code(line, lex.tokenize());
+                night.exec();
+                // println!("--- STACK ---");
+                // println!("{}", night.get_scope().borrow());
+            },
+        }
+    }
 }

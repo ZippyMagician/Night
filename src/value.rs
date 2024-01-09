@@ -5,8 +5,8 @@ use crate::utils::error::{night_err, Status};
 
 #[derive(Clone, Debug)]
 enum Type {
-    Int(i32),
-    Float(f32),
+    Int(i64),
+    Float(f64),
     Str(String),
 }
 
@@ -50,18 +50,18 @@ impl Value {
     }
 
     #[inline]
-    pub fn as_int(self) -> Status<i32> {
+    pub fn as_int(self) -> Status<i64> {
         match self.t {
             Type::Int(n) => Ok(n),
-            Type::Float(n) => Ok(n as i32),
+            Type::Float(n) => Ok(n as i64),
             _ => night_err!(NaN),
         }
     }
 
     #[inline]
-    pub fn as_float(self) -> Status<f32> {
+    pub fn as_float(self) -> Status<f64> {
         match self.t {
-            Type::Int(n) => Ok(n as f32),
+            Type::Int(n) => Ok(n as f64),
             Type::Float(n) => Ok(n),
             _ => night_err!(NaN),
         }
@@ -139,12 +139,12 @@ impl PartialEq for Value {
         match &self.t {
             Type::Int(left) => match &other.t {
                 Type::Int(right) => left == right,
-                Type::Float(right) => *left as f32 == *right,
+                Type::Float(right) => *left as f64 == *right,
                 _ => false,
             },
             Type::Float(left) => match &other.t {
                 Type::Float(right) => left == right,
-                Type::Int(right) => *left == *right as f32,
+                Type::Int(right) => *left == *right as f64,
                 _ => false,
             },
             Type::Str(left) => match &other.t {
@@ -160,12 +160,12 @@ impl PartialOrd for Value {
         match &self.t {
             Type::Int(left) => match other.t {
                 Type::Int(right) => left.partial_cmp(&right),
-                Type::Float(right) => (*left as f32).partial_cmp(&right),
+                Type::Float(right) => (*left as f64).partial_cmp(&right),
                 _ => None,
             },
             Type::Float(left) => match other.t {
                 Type::Float(right) => left.partial_cmp(&right),
-                Type::Int(right) => left.partial_cmp(&(right as f32)),
+                Type::Int(right) => left.partial_cmp(&(right as f64)),
                 _ => None,
             },
             Type::Str(left) => match &other.t {
@@ -192,16 +192,16 @@ impl Display for Value {
     }
 }
 
-impl From<i32> for Value {
-    fn from(value: i32) -> Self {
+impl From<i64> for Value {
+    fn from(value: i64) -> Self {
         Self {
             t: Type::Int(value),
         }
     }
 }
 
-impl From<f32> for Value {
-    fn from(value: f32) -> Self {
+impl From<f64> for Value {
+    fn from(value: f64) -> Self {
         Self {
             t: Type::Float(value),
         }

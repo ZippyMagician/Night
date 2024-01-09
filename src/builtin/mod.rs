@@ -107,6 +107,8 @@ pub enum Intrinsic {
     Loop,
     If,
     DefineRegister,
+    StackDump,
+    SymDump,
 }
 
 impl Intrinsic {
@@ -115,6 +117,8 @@ impl Intrinsic {
             "call" => Some(Self::Call),
             "loop" => Some(Self::Loop),
             "if" => Some(Self::If),
+            "stack_dump" => Some(Self::StackDump),
+            "sym_dump" => Some(Self::SymDump),
             _ => None,
         }
     }
