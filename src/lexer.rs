@@ -203,7 +203,7 @@ impl<'a> Lexer<'a> {
         if end - start == 1 {
             lex_err!("LexError: Missing identifier for register."; self.input, start, 1, self.line => self.line);
         }
-        
+
         lex_tok!(Token::Register, start + 1, end, self, start, end - start, 0)
     }
 

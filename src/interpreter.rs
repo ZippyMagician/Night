@@ -153,8 +153,23 @@ impl Night {
             Token::OpenCurly => self.parse_block(None)?,
             Token::CloseCurly => return night_err!(Syntax, "Unbalanced block."),
             Token::DefineSym => {
-                if self.spans.len() > 1 && self.spans[self.spans.len() - 2].as_lit() != b"\n" {
-                    return night_err!(Syntax, "Definition must begin at the start of a line.");
+                if self.spans.len() > 1 {
+                    let mut i = self.spans.len() - 2;
+                    loop {
+                        match self.spans[i].as_lit() {
+                            b"\n" => break,
+                            s if s.len() > 1 || !s[0].is_ascii_whitespace() => {
+                                return night_err!(
+                                    Syntax,
+                                    "Definition must begin at the start of a line."
+                                )
+                            }
+                            _ => {
+                                i -= 1;
+                                continue;
+                            }
+                        }
+                    }
                 }
                 self.parse_define()?
             }
@@ -455,7 +470,7 @@ impl Night {
                 s.push(value)
             }
             PushFunc(f, _) => self.scope.borrow_mut().push(StackVal::Function(f)),
-            Intrinsic(intr, i) => self.exec_intrinsic(intr, i)?, 
+            Intrinsic(intr, i) => self.exec_intrinsic(intr, i)?,
             Op(o, _) => o.call(self.scope.clone())?,
             Internal(b, _) => b.call(self.scope.clone())?,
             Guard(guard, _) => {

@@ -79,7 +79,8 @@ fn main() {
         io::stdout().flush().unwrap();
 
         input = String::new();
-        io::stdin().read_line(&mut input)
+        io::stdin()
+            .read_line(&mut input)
             .expect("Error reading line");
 
         match input.as_ref() {
@@ -90,7 +91,7 @@ fn main() {
                 night.exec();
                 // println!("--- STACK ---");
                 // println!("{}", night.get_scope().borrow());
-            },
+            }
         }
     }
 }
