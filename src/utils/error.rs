@@ -161,6 +161,7 @@ pub enum NightError {
     SymbolRedefinition(String),
     Unimplemented(String),
     Runtime(String),
+    Warning(String),
     // TODO: whatever else I need
 }
 
@@ -194,6 +195,7 @@ impl Display for NightError {
             SymbolRedefinition(s) => write!(f, "StackError: Attempted to redefine symbol '{s}'."),
             Unimplemented(s) => write!(f, "ImplementationError: '{s}' is unimplemented."),
             Runtime(s) => write!(f, "RuntimeError: {s}"),
+            Warning(s) => write!(f, "Warning: {s}"),
         }
     }
 }

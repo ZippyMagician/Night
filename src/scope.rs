@@ -148,7 +148,7 @@ impl ScopeInternal {
                 println!("{s}: {val}");
             }
         }
-        println!("---             ---");
+        println!("-------------------");
     }
 
     // For now this returns a `Status`, as I might use it in the future.
@@ -163,6 +163,13 @@ impl ScopeInternal {
             if let Some(v) = self.env.remove(&SymbolType::Register(g.clone())) {
                 trace.push(v)?;
             }
+        } else if self.env.contains_key(&SymbolType::Register(g.clone())) {
+            // The register is newly guarded, but has a previous value assigned to it
+            self.env.remove(&SymbolType::Register(g.clone()));
+            return night_err!(
+                Warning,
+                format!("Global register '${g}' will be overwritten due to guard statement.")
+            );
         }
         Ok(())
     }

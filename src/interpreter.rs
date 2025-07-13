@@ -425,7 +425,9 @@ impl Night {
             let span = instr.get_span();
             if let Err(e) = self.exec_instr(instr) {
                 // If there is an existing trace, print that too
-                if !self.callback.is_empty() {
+                if let NightError::Warning(msg) = e {
+                    error::warn(msg, self.spans[span].clone());
+                } else if !self.callback.is_empty() {
                     let trace = self
                         .callback
                         .iter()
@@ -517,7 +519,7 @@ impl Night {
             Intr::Loop => self.exec_intr_loop(from),
             Intr::DefineRegister => self.exec_intr_defr(from),
             Intr::StackDump => {
-                println!("--- STACK DMP: ---\n{}\n---            ---", scope.borrow());
+                println!("--- STACK DMP: ---\n{}------------------", scope.borrow());
                 Ok(())
             }
             Intr::SymDump => {
