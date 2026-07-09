@@ -281,10 +281,13 @@ fn op_pop(scope: Scope) -> Status {
 }
 
 fn op_swap(scope: Scope) -> Status {
-    let mut s = scope.borrow_mut().raw_stack();
-    let len = s.len();
-    if len < 2 return night_err!(NothingToPop);
-    s.swap(len - 2, len - 1);
+    let mut s = scope.borrow_mut();
+    let stack = s.raw_stack();
+    let len = stack.len();
+    if len < 2 {
+        return night_err!(NothingToPop);
+    }
+    stack.swap(len - 2, len - 1);
     Ok(())
 }
 
@@ -362,10 +365,13 @@ fn dup_dip(scope: Scope) -> Status {
 }
 
 fn swap_dip(scope: Scope) -> Status {
-    let mut s = scope.borrow_mut().raw_stack();
-    let len = s.len();
-    if len < 3 return night_err!(NothingToPop);
-    s.swap(len - 3, len - 2);
+    let mut s = scope.borrow_mut();
+    let stack = s.raw_stack();
+    let len = stack.len();
+    if len < 3 {
+        return night_err!(NothingToPop);
+    }
+    stack.swap(len - 3, len - 2);
     Ok(())
 }
 
