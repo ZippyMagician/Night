@@ -1,4 +1,5 @@
 use std::fmt::{self, Display};
+use std::iter::Iterator;
 use std::ops::{Add, Div, Mul, Rem, Sub};
 
 use crate::utils::error::{night_err, Status};
@@ -8,6 +9,7 @@ enum Type {
     Int(i64),
     Float(f64),
     Str(String),
+    Array(Vec<Value>),
 }
 
 #[repr(transparent)]
@@ -22,6 +24,7 @@ impl Value {
         match &left.t {
             Type::Int(_) | Type::Float(_) => matches!(right.t, Type::Int(_) | Type::Float(_)),
             Type::Str(_) => matches!(right.t, Type::Str(_)),
+            Type::Array(_) => matches!(right.t, Type::Array(_)),
         }
     }
 
@@ -68,6 +71,29 @@ impl Value {
     }
 
     #[inline]
+    pub fn is_array(&self) -> bool {
+        match self.t {
+            Type::Array(_) => true,
+            Type::Str(_) => true,
+            _ => false,
+        }
+    }
+
+    #[inline]
+    pub fn as_array(self) -> Status<Vec<Value>> {
+        match self.t {
+            Type::Array(v) => Ok(v),
+            Type::Str(s) => Ok(s
+                .chars()
+                .map(|c| Self {
+                    t: Type::Str(c.to_string()),
+                })
+                .collect()),
+            _ => night_err!(UnsupportedType, "Expected array."),
+        }
+    }
+
+    #[inline]
     pub fn is_str(&self) -> bool {
         match self.t {
             Type::Str(_) => true,
@@ -80,6 +106,14 @@ impl Value {
         match self.t {
             Type::Str(s) => Ok(s),
             _ => night_err!(UnsupportedType, "Expected string."),
+        }
+    }
+
+    #[inline]
+    pub fn as_str_unchecked(self) -> String {
+        match self.t {
+            Type::Str(s) => s,
+            _ => unreachable!(),
         }
     }
 
@@ -151,6 +185,10 @@ impl PartialEq for Value {
                 Type::Str(right) => left == right,
                 _ => false,
             },
+            Type::Array(left) => match &other.t {
+                Type::Array(right) => left.iter().zip(right).all(|(l, r)| l == r),
+                _ => false,
+            },
         }
     }
 }
@@ -172,6 +210,10 @@ impl PartialOrd for Value {
                 Type::Str(right) => left.partial_cmp(&right),
                 _ => None,
             },
+            Type::Array(left) => match &other.t {
+                Type::Array(right) => left.partial_cmp(&right),
+                _ => None,
+            },
         }
     }
 }
@@ -188,6 +230,16 @@ impl Display for Value {
                 }
             }
             Type::Str(s) => write!(f, "{s}"),
+            Type::Array(l) => {
+                write!(f, "[")?;
+                for i in 0..(l.len() - 1) {
+                    write!(f, "{}, ", l[i])?;
+                }
+                if l.len() > 0 {
+                    write!(f, "{}", l[l.len() - 1])?;
+                }
+                write!(f, "]")
+            }
         }
     }
 }
@@ -228,6 +280,14 @@ impl From<&str> for Value {
     fn from(value: &str) -> Self {
         Self {
             t: Type::Str(value.to_string()),
+        }
+    }
+}
+
+impl From<Vec<Value>> for Value {
+    fn from(value: Vec<Value>) -> Self {
+        Self {
+            t: Type::Array(value),
         }
     }
 }

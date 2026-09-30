@@ -14,6 +14,7 @@ use crate::value::Value;
 #[derive(Clone)]
 pub enum Instr {
     Push(Value, usize),
+    PushArray(Vec<Value>, usize),
     PushFunc(Rc<dyn Generable>, usize),
     PushSym(String, bool, usize),
     Op(Operator, usize),
@@ -30,6 +31,7 @@ impl Instr {
     pub fn get_span(&self) -> usize {
         match self {
             Instr::Push(_, s) => *s,
+            Instr::PushArray(_, s) => *s,
             Instr::PushFunc(_, s) => *s,
             Instr::PushSym(_, _, s) => *s,
             Instr::Op(_, s) => *s,
@@ -152,6 +154,8 @@ impl Night {
             Token::CloseParen => return night_err!(Syntax, "Unbalanced parenthesis."),
             Token::OpenCurly => self.parse_block(None)?,
             Token::CloseCurly => return night_err!(Syntax, "Unbalanced block."),
+            Token::OpenBracket => self.parse_array()?,
+            Token::CloseBracket => return night_err!(Syntax, "Unbalanced array."),
             Token::DefineSym => {
                 if self.spans.len() > 1 {
                     let mut i = self.spans.len() - 2;
@@ -189,8 +193,11 @@ impl Night {
                 ))?;
                 match ident {
                     Instr::Push(value, _) if value.is_str() => {
-                        let name = value.as_str()?;
+                        let name = value.as_str_unchecked();
                         push_instr!(Instr::Block, vec![name], self)
+                    }
+                    Instr::PushArray(array, _) if array.iter().all(|n| n.is_str()) => {
+                        push_instr!(Instr::Block, array.into_iter().map(Value::as_str_unchecked).collect(), self)
                     }
                     _ => return night_err!(Syntax, "Register block statement requires a valid preceeding literal [word/string/array of strings]."),
                 }
@@ -201,8 +208,7 @@ impl Night {
                 ))?;
                 self.span_between(self.spans.len() - 2, self.spans.len() - 1);
                 push_instr!(Instr::PushFunc, Rc::new(SingleFunc::from(instr)), self)
-            }
-            _ => return night_err!(Unimplemented, format!("Token '{tok:?}'")),
+            } // _ => return night_err!(Unimplemented, format!("Token '{tok:?}'")),
         }
 
         Ok(())
@@ -222,6 +228,53 @@ impl Night {
             }
         } else {
             unreachable!()
+        }
+    }
+
+    fn parse_array(&mut self) -> Status {
+        let mut array_queue = Vec::new();
+        array_queue.push((self.instrs.len(), self.spans.len() - 1));
+
+        while let Some((t, s)) = self.tokens.next() {
+            self.spans.push(s);
+
+            // See `parse_block` for reasoning
+            match t {
+                Token::CloseBracket => {
+                    let (start, span_start) = array_queue.pop().unwrap();
+                    let span_end = self.spans.len() - 1;
+                    let array = self.instrs.split_off(start);
+                    self.span_between(span_start, span_end);
+                    if array.iter().all(|n| matches!(n, Instr::Push(_, _))) {
+                        push_instr!(
+                            Instr::PushArray,
+                            array
+                                .into_iter()
+                                .map(|n| match n {
+                                    Instr::Push(v, _) => v,
+                                    _ => unreachable!(),
+                                })
+                                .collect(),
+                            self
+                        );
+                    } else {
+                        return night_err!(Syntax, "Arrays must contain values.");
+                    }
+
+                    if array_queue.is_empty() {
+                        break;
+                    }
+                }
+                Token::OpenBracket => array_queue.push((self.instrs.len(), self.spans.len() - 1)),
+                _ => self.build_instr(t)?,
+            }
+        }
+
+        if array_queue.is_empty() {
+            Ok(())
+        } else {
+            self.span_between(array_queue.pop().unwrap().1, self.spans.len() - 1);
+            night_err!(Syntax, "Unbalanced array.")
         }
     }
 
@@ -458,6 +511,7 @@ impl Night {
 
         match instr {
             Push(v, _) => self.scope.borrow_mut().push_value(v),
+            PushArray(a, _) => self.scope.borrow_mut().push_value(Value::from(a)),
             // When a symbol is defined as a function, it is executed in place
             PushSym(v, false, i) => {
                 let definition = self.scope.borrow().get_sym(v).cloned()?;
@@ -588,6 +642,7 @@ impl Debug for Instr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Instr::Push(v, _) => write!(f, "Push({v})"),
+            Instr::PushArray(a, _) => write!(f, "Push({a:?})"),
             Instr::PushFunc(_, _) => write!(f, "Push(<function>)"),
             Instr::PushSym(s, false, _) => write!(f, "Exec({s})"),
             Instr::PushSym(s, true, _) => write!(f, "Push(${s})"),

@@ -171,11 +171,16 @@ impl ScopeInternal {
                 format!("Global register '${g}' will be overwritten due to guard statement.")
             );
         }
+
+        if self.register_trace.get(&g).is_none() {
+            self.add_trace(g);
+        }
         Ok(())
     }
 
     pub fn rem_guard(&mut self, g: String) -> Status {
-        if !self.register_trace.get(&g).unwrap().has_trace() {
+        let trace = self.register_trace.get(&g);
+        if trace.map(|n| !n.has_trace()).unwrap_or(true) {
             self.guard.remove(&g);
         }
         self.undef_reg(g)

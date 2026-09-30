@@ -17,7 +17,7 @@ Note for future: Currently there is no way for builtins and operators to efficie
 - [ ] Mutable scoped registers
 - [x] Guard statements
 - [x] Fully decide how arrays will work
-- [ ] Implement basic array support
+- [x] Implement basic array support
 - [ ] Implement array support builtins + ops
 - [x] Implement operators
 - [x] Implement basic builtins (poc)
