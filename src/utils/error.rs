@@ -5,6 +5,7 @@ use std::rc::Rc;
 
 #[derive(Clone, Debug)]
 pub struct Span {
+    file: Rc<str>,
     code: Rc<str>,
     start: usize,
     len: usize,
@@ -15,6 +16,7 @@ pub struct Span {
 impl Span {
     pub fn empty() -> Self {
         Self {
+            file: "".into(),
             code: "".into(),
             start: 0,
             len: 0,
@@ -24,6 +26,7 @@ impl Span {
     }
 
     pub fn span(
+        file: Rc<str>,
         code: Rc<str>,
         start: usize,
         len: usize,
@@ -31,6 +34,7 @@ impl Span {
         line_end: usize,
     ) -> Self {
         Self {
+            file,
             code,
             start,
             len,
@@ -41,6 +45,7 @@ impl Span {
 
     pub fn between(left: &Span, right: &Span) -> Self {
         Self {
+            file: left.file.clone(),
             code: left.code.clone(),
             start: left.start,
             len: right.start.abs_diff(left.start + left.len) + left.len + right.len,
@@ -100,11 +105,19 @@ impl Span {
 impl Display for Span {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let (lefti, righti) = self.get_index();
-        writeln!(
-            f,
-            "[({}:{}) => ({}:{})]:",
-            self.line_start, lefti, self.line_end, righti
-        )?;
+        if self.line_start == self.line_end {
+            writeln!(
+                f,
+                "[<{}> ({}:{}..{})]:",
+                self.file, self.line_start, lefti, righti
+            )?;
+        } else {
+            writeln!(
+                f,
+                "[<{}> ({}..{}:{}..{})]:",
+                self.file, self.line_start, self.line_end, lefti, righti
+            )?;
+        }
 
         if self.line_start == self.line_end {
             writeln!(f, "{}", self.fmt_line(self.line_start))?;
@@ -120,10 +133,17 @@ impl Display for Span {
 
 // Shorthand macro for calling crate::utils::error::error, used in `lexer.js`
 macro_rules! lex_err {
-    ($msg:expr ; $code:expr, $start:expr, $len:expr, $line_start:expr => $line_end:expr) => {
+    ($msg:expr ; $file:expr, $code:expr, $start:expr, $len:expr, $line_start:expr => $line_end:expr) => {
         crate::utils::error::error(
             $msg,
-            crate::utils::error::Span::span($code.clone(), $start, $len, $line_start, $line_end),
+            crate::utils::error::Span::span(
+                $file.clone(),
+                $code.clone(),
+                $start,
+                $len,
+                $line_start,
+                $line_end,
+            ),
         )
     };
 }

@@ -13,7 +13,7 @@ pub fn is_one_word(s: &str) -> bool {
 }
 
 pub fn define_fns(night: &mut Night, def: &'static str) {
-    let lexer = Lexer::new(def);
+    let lexer = Lexer::new(def, "std.n");
     let tokens = lexer.tokenize();
     night.push_new_code(def, tokens);
     night.exec();

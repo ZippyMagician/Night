@@ -48,6 +48,7 @@ pub enum Token {
 pub type LexTok = (Token, Span);
 
 pub struct Lexer<'a> {
+    file: Rc<str>,
     input: Rc<str>,
     chars: Peekable<CharIndices<'a>>,
     line: usize,
@@ -61,7 +62,14 @@ macro_rules! lex_tok {
         let buf = &$s.input[$s_start..$s_end];
         Some((
             $t(buf.into()),
-            span($s.input.clone(), $start, $len, $s.line, $s.line + $lines),
+            span(
+                $s.file.clone(),
+                $s.input.clone(),
+                $start,
+                $len,
+                $s.line,
+                $s.line + $lines,
+            ),
         ))
     }};
 
@@ -69,14 +77,22 @@ macro_rules! lex_tok {
         let span = crate::lexer::Span::span;
         Some((
             $t,
-            span($s.input.clone(), $start, $len, $s.line, $s.line + $lines),
+            span(
+                $s.file.clone(),
+                $s.input.clone(),
+                $start,
+                $len,
+                $s.line,
+                $s.line + $lines,
+            ),
         ))
     }};
 }
 
 impl<'a> Lexer<'a> {
-    pub fn new(input: &'a str) -> Self {
+    pub fn new(input: &'a str, file: &'a str) -> Self {
         Self {
+            file: file.into(),
             input: input.into(),
             chars: input.char_indices().peekable(),
             line: 0,
@@ -98,6 +114,7 @@ impl<'a> Lexer<'a> {
         self.tokens.push((
             Token::EOF,
             Span::span(
+                self.file.clone(),
                 self.input.clone(),
                 self.input.len() - 1,
                 1,
@@ -118,7 +135,7 @@ impl<'a> Lexer<'a> {
             c if c.is_whitespace() => self.consume_whitespace(c, start),
             c if c.is_ascii_punctuation() => self.maybe_op(c, start),
             _ => {
-                lex_err!("LexError: Unrecognized token."; self.input, start, 1, self.line => self.line)
+                lex_err!("LexError: Unrecognized token."; self.file, self.input, start, 1, self.line => self.line)
             }
         }
     }
@@ -155,7 +172,7 @@ impl<'a> Lexer<'a> {
             ')' => lex_tok!(Token::CloseParen, self, start, 1, 0),
             _ if OP_MAP.contains_key(&self.input[start..start + 1]) => self.consume_op(start),
             _ => {
-                lex_err!("LexError: Unrecognized token."; self.input, start, 1, self.line => self.line)
+                lex_err!("LexError: Unrecognized token."; self.file, self.input, start, 1, self.line => self.line)
             }
         }
     }
@@ -201,7 +218,7 @@ impl<'a> Lexer<'a> {
     fn consume_register(&mut self, start: usize) -> Option<LexTok> {
         let (start, end) = self.calculate_var_bounds(start);
         if end - start == 1 {
-            lex_err!("LexError: Missing identifier for register."; self.input, start, 1, self.line => self.line);
+            lex_err!("LexError: Missing identifier for register."; self.file, self.input, start, 1, self.line => self.line);
         }
 
         lex_tok!(Token::Register, start + 1, end, self, start, end - start, 0)
@@ -229,7 +246,7 @@ impl<'a> Lexer<'a> {
         let span = end - start;
 
         if !valid_str {
-            lex_err!("LexError: String not terminated."; self.input, start, span, self.line => self.line + lines);
+            lex_err!("LexError: String not terminated."; self.file, self.input, start, span, self.line => self.line + lines);
         }
 
         let tok = lex_tok!(Token::String, start + 1, end - 1, self, start, span, lines);
@@ -253,7 +270,7 @@ impl<'a> Lexer<'a> {
 
     fn consume_char_lit(&mut self, start: usize) -> Option<LexTok> {
         if self.chars.next().is_none() {
-            lex_err!("LexError: Missing following char identifier."; self.input, start, 1, self.line => self.line);
+            lex_err!("LexError: Missing following char identifier."; self.file, self.input, start, 1, self.line => self.line);
         }
 
         lex_tok!(Token::String, start + 1, start + 2, self, start, 1, 0)

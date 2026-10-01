@@ -86,7 +86,7 @@ fn main() {
         match input.as_ref() {
             "halt\n" => break,
             line => {
-                let lex = Lexer::new(line);
+                let lex = Lexer::new(line, "cli");
                 night.push_new_code(line, lex.tokenize());
                 night.exec();
                 // println!("--- STACK ---");
