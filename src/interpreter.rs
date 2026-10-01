@@ -649,11 +649,31 @@ impl Debug for Instr {
             Instr::PushSym(s, true, _) => write!(f, "Push(${s})"),
             Instr::Op(o, _) => write!(f, "{o:?}"),
             Instr::Internal(b, _) => write!(f, "{b:?}"),
-            Instr::Intrinsic(i, _) => write!(f, "Intrinsic({i:?}"),
+            Instr::Intrinsic(i, _) => write!(f, "Intrinsic({i:?})"),
             Instr::Guard(syms, _) => write!(f, "<guard: {syms:?}>"),
             Instr::GuardEnd(syms, _) => write!(f, "<guard_end: {syms:?}>"),
             Instr::Block(syms, _) => write!(f, "<block: {syms:?}>"),
             Instr::Unblock(syms, _) => write!(f, "<unblock: {syms:?}>"),
+            Instr::EndCallback => unreachable!(),
+        }
+    }
+}
+
+impl Display for Instr {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Instr::Push(v, _) => write!(f, "{v}"),
+            Instr::PushArray(a, _) => write!(f, "{}", Value::from(a.clone())),
+            Instr::PushFunc(func, _) => write!(f, "{func}"),
+            Instr::PushSym(s, false, _) => write!(f, "{s}"),
+            Instr::PushSym(s, true, _) => write!(f, "${s}"),
+            Instr::Op(o, _) => write!(f, "{o:?}"),
+            Instr::Internal(b, _) => write!(f, "{b:?}"),
+            Instr::Intrinsic(i, _) => write!(f, "{i:?}"),
+            Instr::Guard(syms, _) => write!(f, "({})", syms.join(" ")),
+            Instr::GuardEnd(_, _) => Ok(()),
+            Instr::Block(syms, _) => write!(f, "[{}] |", syms.join(" ")),
+            Instr::Unblock(_, _) => Ok(()),
             Instr::EndCallback => unreachable!(),
         }
     }

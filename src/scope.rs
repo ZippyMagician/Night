@@ -50,14 +50,17 @@ impl StackVal {
 
 impl Debug for StackVal {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{self}")
+        match self {
+            Self::Function(_) => write!(f, "<function>"),
+            Self::Value(v) => write!(f, "{v:?}"),
+        }
     }
 }
 
 impl Display for StackVal {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Function(_) => write!(f, "<function>"),
+            Self::Function(func) => write!(f, "{func}"),
             Self::Value(v) => write!(f, "{v}"),
         }
     }

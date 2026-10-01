@@ -1,3 +1,4 @@
+use std::fmt;
 use std::rc::Rc;
 
 use crate::interpreter::Instr;
@@ -124,6 +125,18 @@ impl From<Instr> for SingleFunc {
     #[inline]
     fn from(value: Instr) -> Self {
         Self(value)
+    }
+}
+
+impl fmt::Display for dyn Generable {
+    #[inline]
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let instrs = self.gen_instrs(usize::MAX);
+        write!(f, "{{ ")?;
+        for instr in instrs {
+            write!(f, "{instr} ")?;
+        }
+        write!(f, "}}")
     }
 }
 
