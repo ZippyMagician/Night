@@ -71,6 +71,7 @@ fn main() {
         -> unless : ;@ ?@ if
         -> choose 3 rotn ;@ nip@ if
         "#,
+        "std/stack.nt",
     );
 
     let mut input;

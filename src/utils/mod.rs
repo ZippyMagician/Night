@@ -12,8 +12,8 @@ pub fn is_one_word(s: &str) -> bool {
     s.chars().all(valid_symbol_chr)
 }
 
-pub fn define_fns(night: &mut Night, def: &'static str) {
-    let lexer = Lexer::new(def, "std.n");
+pub fn define_fns(night: &mut Night, def: &'static str, file: &'static str) {
+    let lexer = Lexer::new(def, file);
     let tokens = lexer.tokenize();
     night.push_new_code(def, tokens);
     night.exec();
