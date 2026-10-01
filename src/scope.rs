@@ -1,5 +1,5 @@
 use std::collections::{HashMap, HashSet};
-use std::fmt::{self, Display};
+use std::fmt::{self, Debug, Display};
 use std::rc::Rc;
 
 use crate::utils::error::{night_err, NightError, Status};
@@ -29,6 +29,29 @@ impl StackVal {
             Self::Value(v) => Ok(v),
         }
     }
+
+    #[inline]
+    pub fn is_str(&self) -> bool {
+        match &self {
+            Self::Value(v) => v.is_str(),
+            _ => false,
+        }
+    }
+
+    #[inline]
+    pub fn as_str_unchecked(self) -> String {
+        if let Self::Value(v) = self {
+            v.as_str_unchecked()
+        } else {
+            unreachable!();
+        }
+    }
+}
+
+impl Debug for StackVal {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{self}")
+    }
 }
 
 impl Display for StackVal {
@@ -40,9 +63,33 @@ impl Display for StackVal {
     }
 }
 
+impl PartialEq for StackVal {
+    fn eq(&self, other: &Self) -> bool {
+        match self {
+            Self::Value(v) if let Self::Value(r) = other => v == r,
+            _ => false,
+        }
+    }
+}
+
+impl PartialOrd for StackVal {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        match &self {
+            Self::Value(v) if let Self::Value(r) = other => v.partial_cmp(r),
+            _ => None,
+        }
+    }
+}
+
 impl From<Value> for StackVal {
     fn from(value: Value) -> Self {
         Self::Value(value)
+    }
+}
+
+impl From<Rc<dyn Generable>> for StackVal {
+    fn from(value: Rc<dyn Generable>) -> Self {
+        Self::Function(value)
     }
 }
 

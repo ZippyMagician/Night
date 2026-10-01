@@ -14,7 +14,7 @@ use crate::value::Value;
 #[derive(Clone)]
 pub enum Instr {
     Push(Value, usize),
-    PushArray(Vec<Value>, usize),
+    PushArray(Vec<StackVal>, usize),
     PushFunc(Rc<dyn Generable>, usize),
     PushSym(String, bool, usize),
     Op(Operator, usize),
@@ -197,7 +197,7 @@ impl Night {
                         push_instr!(Instr::Block, vec![name], self)
                     }
                     Instr::PushArray(array, _) if array.iter().all(|n| n.is_str()) => {
-                        push_instr!(Instr::Block, array.into_iter().map(Value::as_str_unchecked).collect(), self)
+                        push_instr!(Instr::Block, array.into_iter().map(StackVal::as_str_unchecked).collect(), self)
                     }
                     _ => return night_err!(Syntax, "Register block statement requires a valid preceeding literal [word/string/array of strings]."),
                 }
@@ -245,21 +245,22 @@ impl Night {
                     let span_end = self.spans.len() - 1;
                     let array = self.instrs.split_off(start);
                     self.span_between(span_start, span_end);
-                    if array.iter().all(|n| matches!(n, Instr::Push(_, _))) {
-                        push_instr!(
-                            Instr::PushArray,
-                            array
-                                .into_iter()
-                                .map(|n| match n {
-                                    Instr::Push(v, _) => v,
-                                    _ => unreachable!(),
-                                })
-                                .collect(),
-                            self
-                        );
-                    } else {
-                        return night_err!(Syntax, "Arrays must contain values.");
-                    }
+                    push_instr!(
+                        Instr::PushArray,
+                        array
+                            .into_iter()
+                            .map(|n| match n {
+                                Instr::Push(v, _) => Ok(StackVal::from(v)),
+                                Instr::PushFunc(f, _) => Ok(StackVal::from(f)),
+                                Instr::PushSym(n, false, _) =>
+                                    self.scope.borrow().get_sym(n).cloned(),
+                                Instr::PushSym(n, true, _) =>
+                                    self.scope.borrow().get_reg(n).cloned(),
+                                _ => night_err!(Syntax, "Arrays are defined with values"),
+                            })
+                            .collect::<Status<Vec<StackVal>>>()?,
+                        self
+                    );
 
                     if array_queue.is_empty() {
                         break;

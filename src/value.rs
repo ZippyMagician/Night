@@ -2,6 +2,7 @@ use std::fmt::{self, Display};
 use std::iter::Iterator;
 use std::ops::{Add, Div, Mul, Rem, Sub};
 
+use crate::scope::StackVal;
 use crate::utils::error::{night_err, Status};
 
 #[derive(Clone, Debug)]
@@ -9,7 +10,7 @@ enum Type {
     Int(i64),
     Float(f64),
     Str(String),
-    Array(Vec<Value>),
+    Array(Vec<StackVal>),
 }
 
 #[repr(transparent)]
@@ -80,13 +81,15 @@ impl Value {
     }
 
     #[inline]
-    pub fn as_array(self) -> Status<Vec<Value>> {
+    pub fn as_array(self) -> Status<Vec<StackVal>> {
         match self.t {
             Type::Array(v) => Ok(v),
             Type::Str(s) => Ok(s
                 .chars()
-                .map(|c| Self {
-                    t: Type::Str(c.to_string()),
+                .map(|c| {
+                    StackVal::from(Self {
+                        t: Type::Str(c.to_string()),
+                    })
                 })
                 .collect()),
             _ => night_err!(UnsupportedType, "Expected array."),
@@ -286,6 +289,14 @@ impl From<&str> for Value {
 
 impl From<Vec<Value>> for Value {
     fn from(value: Vec<Value>) -> Self {
+        Self {
+            t: Type::Array(value.into_iter().map(StackVal::from).collect()),
+        }
+    }
+}
+
+impl From<Vec<StackVal>> for Value {
+    fn from(value: Vec<StackVal>) -> Self {
         Self {
             t: Type::Array(value),
         }
