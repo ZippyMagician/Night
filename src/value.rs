@@ -38,6 +38,26 @@ impl Value {
     }
 
     #[inline]
+    pub fn map_num<T: FnOnce(i64) -> i64>(mut self, f: T) -> Status<Self> {
+        if let Type::Int(n) = &mut self.t {
+            *n = f(*n);
+            Ok(self)
+        } else {
+            night_err!(NaN)
+        }
+    }
+
+    #[inline]
+    pub fn map_float<T: FnOnce(f64) -> f64>(mut self, f: T) -> Status<Self> {
+        if let Type::Float(n) = &mut self.t {
+            *n = f(*n);
+            Ok(self)
+        } else {
+            night_err!(NaN)
+        }
+    }
+
+    #[inline]
     pub fn is_int(&self) -> bool {
         match self.t {
             Type::Int(_) => true,
@@ -149,13 +169,25 @@ macro_rules! impl_arith_ops {
 
                 fn $f(self, rhs: Self) -> Self::Output {
                     if self.is_float() || rhs.is_float() {
-                        let $a1 = self.as_float()?;
                         let $a2 = rhs.as_float()?;
-                        Ok(Value::from($operation))
+                        self.map_float(|$a1| $operation)
                     } else {
-                        let $a1 = self.as_int()?;
                         let $a2 = rhs.as_int()?;
-                        Ok(Value::from($operation))
+                        self.map_num(|$a1| $operation)
+                    }
+                }
+            }
+
+            impl $name<i64> for Value {
+                type Output = Status<Value>;
+
+                fn $f(self, rhs: i64) -> Self::Output {
+                    if self.is_float() {
+                        let $a2 = rhs as f64;
+                        self.map_float(|$a1| $operation)
+                    } else {
+                        let $a2 = rhs;
+                        self.map_num(|$a1| $operation)
                     }
                 }
             }

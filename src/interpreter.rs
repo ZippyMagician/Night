@@ -572,6 +572,8 @@ impl Night {
             Intr::Call => self.exec_intr_call(from),
             Intr::If => self.exec_intr_if(from),
             Intr::Loop => self.exec_intr_loop(from),
+            Intr::Timed => self.exec_intr_timed(from),
+            Intr::TimedEnd(t1) => self.exec_intr_timed_end(t1, from),
             Intr::DefineRegister => self.exec_intr_defr(from),
             Intr::StackDump => {
                 println!("--- STACK DMP: ---\n{}------------------", scope.borrow());
@@ -620,6 +622,22 @@ impl Night {
         } else {
             self.exec_fn(false_def.gen_instrs(from), from);
         }
+        Ok(())
+    }
+
+    fn exec_intr_timed(&mut self, from: usize) -> Status {
+        let scope = self.scope.clone();
+        let def = scope.borrow_mut().pop()?.as_fn()?;
+        let mut instrs = def.gen_instrs(from);
+        instrs.reserve(1);
+        instrs.push(Instr::Intrinsic(Intr::TimedEnd(std::time::Instant::now()), from));
+        self.exec_fn(instrs, from);
+        Ok(())
+    }
+
+    fn exec_intr_timed_end(&mut self, t1: std::time::Instant, _: usize) -> Status {
+        let t2 = std::time::Instant::now();
+        println!(":: in :: {:?}", t2 - t1);
         Ok(())
     }
 

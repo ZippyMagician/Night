@@ -305,11 +305,11 @@ fn print(scope: Scope) -> Status {
 }
 
 fn inc(_: Scope, v: Value) -> Status<Value> {
-    v + Value::from(1)
+    v + 1
 }
 
 fn dec(_: Scope, v: Value) -> Status<Value> {
-    v - Value::from(1)
+    v - 1
 }
 
 fn def(scope: Scope) -> Status {
@@ -425,7 +425,7 @@ fn floor(_: Scope, value: Value) -> Status<Value> {
     if value.is_int() {
         Ok(value)
     } else {
-        Ok(Value::from(value.as_float()?.floor()))
+        value.map_float(|f| f.floor())
     }
 }
 
@@ -433,7 +433,7 @@ fn ceil(_: Scope, value: Value) -> Status<Value> {
     if value.is_int() {
         Ok(value)
     } else {
-        Ok(Value::from(value.as_float()?.ceil()))
+        value.map_float(|f| f.ceil())
     }
 }
 
