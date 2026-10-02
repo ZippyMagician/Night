@@ -145,7 +145,7 @@ impl<'a> Lexer<'a> {
             return self.skip_comment();
         } else if chr == '-' && self.next_if(|c| c == '>').is_some() {
             return lex_tok!(Token::DefineSym, self, start, 2, 0);
-        } else if chr == '-' && self.next_if(|c| c.is_ascii_digit()).is_some() {
+        } else if chr == '-' && self.chars.peek().map_or(false, |(_, c)| c.is_ascii_digit()) {
             return self.consume_number(start);
         // This uses `peek` instead of `next_if` in order to avoid issues with the 1st char of the word being consumed before `calculate_var_bounds` is called.
         } else if chr == ':'
@@ -190,12 +190,13 @@ impl<'a> Lexer<'a> {
     fn consume_number(&mut self, start: usize) -> Option<LexTok> {
         let mut end = start + 1;
         let mut found_decimal = false;
-        while let Some((_, c)) = self.next_if(|c| c.is_ascii_digit() || c == '.' && !found_decimal)
+        while let Some((_, c)) =
+            self.next_if(|c| c.is_ascii_digit() || !found_decimal && (c == '.'))
         {
+            end += 1;
             if c == '.' {
                 found_decimal = true;
             }
-            end += 1;
         }
         lex_tok!(Token::Number, start, end, self, start, end - start, 0)
     }
