@@ -253,9 +253,9 @@ impl Night {
                                 Instr::Push(v, _) => Ok(StackVal::from(v)),
                                 Instr::PushFunc(f, _) => Ok(StackVal::from(f)),
                                 Instr::PushSym(n, false, _) =>
-                                    self.scope.borrow().get_sym(n).cloned(),
+                                    self.scope.borrow().get_sym(&n).cloned(),
                                 Instr::PushSym(n, true, _) =>
-                                    self.scope.borrow().get_reg(n).cloned(),
+                                    self.scope.borrow().get_reg(&n).cloned(),
                                 _ => night_err!(Syntax, "Arrays are defined with values"),
                             })
                             .collect::<Status<Vec<StackVal>>>()?,
@@ -506,6 +506,31 @@ impl Night {
         }
     }
 
+    // Callback handled by caller
+    #[inline(always)]
+    fn exec_fn_sparse(&mut self, def: &[Instr]) -> Status {
+        for instr in def {
+            if let Instr::Intrinsic(intr, f) = instr {
+                self.exec_intrinsic(intr.clone(), *f, true)?;
+            } else if let Instr::PushSym(v, false, i) = instr {
+                let definition = self.scope.borrow().get_sym(v).cloned()?;
+                match definition {
+                    StackVal::Function(f) => {
+                        self.callback.push(*i);
+                        let instrs = f.gen_instrs(*i);
+                        self.exec_fn_sparse(&instrs)?;
+                        self.callback.pop();
+                    }
+                    StackVal::Value(v) => self.scope.borrow_mut().push_value(v),
+                }
+            } else {
+                self.exec_instr(instr.clone())?;
+            }
+        }
+
+        Ok(())
+    }
+
     #[inline]
     pub fn exec_instr(&mut self, instr: Instr) -> Status {
         use Instr::*;
@@ -515,7 +540,7 @@ impl Night {
             PushArray(a, _) => self.scope.borrow_mut().push_value(Value::from(a)),
             // When a symbol is defined as a function, it is executed in place
             PushSym(v, false, i) => {
-                let definition = self.scope.borrow().get_sym(v).cloned()?;
+                let definition = self.scope.borrow().get_sym(&v).cloned()?;
                 match definition {
                     StackVal::Value(v) => self.scope.borrow_mut().push_value(v),
                     StackVal::Function(f) => self.exec_fn(f.gen_instrs(i), i),
@@ -523,11 +548,11 @@ impl Night {
             }
             PushSym(v, true, _) => {
                 let mut s = self.scope.borrow_mut();
-                let value = s.get_reg(v).cloned()?;
+                let value = s.get_reg(&v).cloned()?;
                 s.push(value)
             }
             PushFunc(f, _) => self.scope.borrow_mut().push(StackVal::Function(f)),
-            Intrinsic(intr, i) => self.exec_intrinsic(intr, i)?,
+            Intrinsic(intr, i) => self.exec_intrinsic(intr, i, false)?,
             Op(o, _) => o.call(self.scope.clone())?,
             Internal(b, _) => b.call(self.scope.clone())?,
             Guard(guard, _) => {
@@ -566,11 +591,11 @@ impl Night {
         Ok(())
     }
 
-    fn exec_intrinsic(&mut self, intr: Intr, from: usize) -> Status {
+    fn exec_intrinsic(&mut self, intr: Intr, from: usize, sparse: bool) -> Status {
         let scope = self.scope.clone();
         match intr {
-            Intr::Call => self.exec_intr_call(from),
-            Intr::If => self.exec_intr_if(from),
+            Intr::Call => self.exec_intr_call(from, sparse),
+            Intr::If => self.exec_intr_if(from, sparse),
             Intr::Loop => self.exec_intr_loop(from),
             Intr::Timed => self.exec_intr_timed(from),
             Intr::TimedEnd(t1) => self.exec_intr_timed_end(t1, from),
@@ -586,10 +611,17 @@ impl Night {
         }
     }
 
-    fn exec_intr_call(&mut self, from: usize) -> Status {
+    fn exec_intr_call(&mut self, from: usize, sparse: bool) -> Status {
         let scope = self.scope.clone();
-        let def = scope.borrow_mut().pop()?.as_fn()?;
-        self.exec_fn(def.gen_instrs(from), from);
+        let def = scope.borrow_mut().pop()?.as_fn()?.gen_instrs(from);
+        if sparse {
+            self.callback.push(from);
+            self.exec_fn_sparse(&def)?;
+            self.callback.pop();
+        } else {
+            self.exec_fn(def, from);
+        }
+
         Ok(())
     }
 
@@ -605,23 +637,37 @@ impl Night {
             return night_err!(Runtime, "'loop' can only take a positive integer.");
         }
 
-        for _ in 0..count {
-            self.exec_fn(def.gen_instrs(from), from);
+        let instrs = def.gen_instrs(from);
+        if count > 100 {
+            for _ in 0..count {
+                self.callback.push(from);
+                self.exec_fn_sparse(&instrs)?;
+                self.callback.pop();
+            }
+        } else {
+            for _ in 0..count {
+                self.exec_fn(instrs.clone(), from);
+            }
         }
         Ok(())
     }
 
-    fn exec_intr_if(&mut self, from: usize) -> Status {
+    fn exec_intr_if(&mut self, from: usize, sparse: bool) -> Status {
         let mut s = self.scope.borrow_mut();
         let false_def = s.pop()?.as_fn()?;
         let true_def = s.pop()?.as_fn()?;
         let cond = s.pop_value()?.as_bool()?;
         drop(s);
-        if cond {
-            self.exec_fn(true_def.gen_instrs(from), from);
+
+        let def = (if cond { true_def } else { false_def }).gen_instrs(from);
+        if sparse {
+            self.callback.push(from);
+            self.exec_fn_sparse(&def)?;
+            self.callback.pop();
         } else {
-            self.exec_fn(false_def.gen_instrs(from), from);
+            self.exec_fn(def, from);
         }
+
         Ok(())
     }
 
@@ -630,7 +676,10 @@ impl Night {
         let def = scope.borrow_mut().pop()?.as_fn()?;
         let mut instrs = def.gen_instrs(from);
         instrs.reserve(1);
-        instrs.push(Instr::Intrinsic(Intr::TimedEnd(std::time::Instant::now()), from));
+        instrs.push(Instr::Intrinsic(
+            Intr::TimedEnd(std::time::Instant::now()),
+            from,
+        ));
         self.exec_fn(instrs, from);
         Ok(())
     }

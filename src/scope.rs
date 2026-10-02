@@ -107,21 +107,6 @@ where
 
 pub type Scope = std::rc::Rc<std::cell::RefCell<ScopeInternal>>;
 
-#[derive(Clone, PartialEq, Eq, Hash)]
-enum SymbolType {
-    Symbol(String),
-    Register(String),
-}
-
-impl ToString for SymbolType {
-    fn to_string(&self) -> String {
-        match self {
-            Self::Symbol(s) => s.clone(),
-            Self::Register(s) => format!("${s}"),
-        }
-    }
-}
-
 #[derive(Clone)]
 struct RegTrace {
     guarded: bool,
@@ -170,7 +155,8 @@ pub struct ScopeInternal {
     stack: Vec<StackVal>,
     guard: HashSet<String>,
     block: HashSet<String>,
-    env: HashMap<SymbolType, StackVal>,
+    env_sym: HashMap<String, StackVal>,
+    env_reg: HashMap<String, StackVal>,
     register_trace: HashMap<String, RegTrace>,
 }
 
@@ -180,7 +166,8 @@ impl ScopeInternal {
             stack: Vec::new(),
             guard: HashSet::new(),
             block: HashSet::new(),
-            env: HashMap::new(),
+            env_sym: HashMap::new(),
+            env_reg: HashMap::new(),
             register_trace: HashMap::new(),
         }
     }
@@ -193,10 +180,8 @@ impl ScopeInternal {
 
     pub fn dump_symbols(&self) {
         println!("--- SYMBOL DMP: ---");
-        for (key, val) in &self.env {
-            if let SymbolType::Symbol(s) = key {
-                println!("{s}: {val}");
-            }
+        for (key, val) in &self.env_sym {
+            println!("{key}: {val}");
         }
         println!("-------------------");
     }
@@ -210,12 +195,12 @@ impl ScopeInternal {
 
             // If a register is blocked, but a new guard overrides it, it is fine to remove the block early
             self.block.remove(&g);
-            if let Some(v) = self.env.remove(&SymbolType::Register(g.clone())) {
+            if let Some(v) = self.env_reg.remove(&g) {
                 trace.push(v)?;
             }
-        } else if self.env.contains_key(&SymbolType::Register(g.clone())) {
+        } else if self.env_reg.contains_key(&g) {
             // The register is newly guarded, but has a previous value assigned to it
-            self.env.remove(&SymbolType::Register(g.clone()));
+            self.env_reg.remove(&g);
             return night_err!(
                 Warning,
                 format!("Global register '${g}' will be overwritten due to guard statement.")
@@ -301,11 +286,10 @@ impl ScopeInternal {
     }
 
     pub fn def_sym(&mut self, sym: String, s: StackVal) -> Status {
-        let sym = SymbolType::Symbol(sym);
-        if self.env.contains_key(&sym) {
+        if self.env_sym.contains_key(&sym) {
             night_err!(SymbolRedefinition, sym.to_string())
         } else {
-            self.env.insert(sym, s);
+            self.env_sym.insert(sym, s);
             Ok(())
         }
     }
@@ -315,30 +299,28 @@ impl ScopeInternal {
         let trace = self.register_trace.get_mut(&name).unwrap();
 
         let guarded = self.guard.contains(&name);
-        let reg = SymbolType::Register(name.clone());
-        if self.env.contains_key(&reg) {
+        if self.env_reg.contains_key(&name) {
             if guarded && !trace.is_guarded() {
                 return night_err!(
                     Runtime,
                     format!("Register '${name}' is guarded, cannot redefine.")
                 );
             } else if guarded && trace.is_guarded() {
-                let v = self.env.remove(&reg).unwrap();
+                let v = self.env_reg.remove(&name).unwrap();
                 trace.push(v)?;
             } else {
-                self.env.remove(&reg);
+                self.env_reg.remove(&name);
             }
         }
 
-        self.env.insert(reg, s.clone());
+        self.env_reg.insert(name, s.clone());
         Ok(s)
     }
 
     pub fn undef_sym(&mut self, sym: String) -> Status<StackVal> {
-        let sym = SymbolType::Symbol(sym);
-        self.env
+        self.env_sym
             .remove(&sym)
-            .ok_or(NightError::UndefinedSymbol(sym.to_string()))
+            .ok_or(NightError::UndefinedSymbol(sym))
     }
 
     pub fn undef_reg(&mut self, name: String) -> Status {
@@ -349,9 +331,8 @@ impl ScopeInternal {
                 format!("Register '${name}' is guarded, cannot undefine.")
             );
         }
-        let reg = SymbolType::Register(name.clone());
-        self.env
-            .remove(&reg)
+        self.env_reg
+            .remove(&name)
             .map(|_| ())
             .ok_or(NightError::Runtime(format!(
                 "Guarded register '${name}' must be defined within the block."
@@ -359,29 +340,27 @@ impl ScopeInternal {
 
         // Reset register to previous guarded value
         if let Some(v) = trace.pop() {
-            self.env.insert(reg, v);
+            self.env_reg.insert(name, v);
         }
         Ok(())
     }
 
-    pub fn get_sym(&self, sym: String) -> Status<&StackVal> {
-        let sym = SymbolType::Symbol(sym);
-        self.env
-            .get(&sym)
+    pub fn get_sym(&self, sym: &str) -> Status<&StackVal> {
+        self.env_sym
+            .get(sym)
             .ok_or(NightError::UndefinedSymbol(sym.to_string()))
     }
 
-    pub fn get_reg(&self, reg: String) -> Status<&StackVal> {
-        if self.block.contains(&reg) {
+    pub fn get_reg(&self, reg: &str) -> Status<&StackVal> {
+        if self.block.contains(reg) {
             return night_err!(
                 Runtime,
                 format!("Register '${reg}' is blocked, cannot access.")
             );
         }
 
-        let reg = SymbolType::Register(reg);
-        self.env
-            .get(&reg)
+        self.env_reg
+            .get(reg)
             .ok_or(NightError::UndefinedSymbol(reg.to_string()))
     }
 
@@ -409,7 +388,8 @@ impl From<Vec<StackVal>> for ScopeInternal {
             stack: value,
             guard: HashSet::new(),
             block: HashSet::new(),
-            env: HashMap::new(),
+            env_sym: HashMap::new(),
+            env_reg: HashMap::new(),
             register_trace: HashMap::new(),
         }
     }
