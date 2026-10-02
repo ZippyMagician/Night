@@ -8,7 +8,7 @@ use crate::value::Value;
 
 /// Defines a struct that can generate a list of instructions to be executed
 pub trait Generable {
-    fn gen_instrs(&self, span: usize) -> Vec<Instr>;
+    fn gen_instrs(&self) -> &[Instr];
 
     fn len(&self) -> usize;
 }
@@ -21,24 +21,26 @@ pub struct BlockFunc {
 
 #[derive(Clone)]
 pub struct CurriedFunc {
-    op: StackVal,
-    block: Rc<dyn Generable>,
+    //op: StackVal,
+    //block: Rc<dyn Generable>,
+    instrs: Vec<Instr>,
 }
 
 #[derive(Clone)]
 pub struct ComposedFunc {
-    block1: Rc<dyn Generable>,
-    block2: Rc<dyn Generable>,
+    //block1: Rc<dyn Generable>,
+    //block2: Rc<dyn Generable>,
+    instrs: Vec<Instr>,
 }
 
 #[derive(Clone)]
 #[repr(transparent)]
-pub struct SingleFunc(Instr);
+pub struct SingleFunc([Instr; 1]);
 
 impl Generable for BlockFunc {
     #[inline]
-    fn gen_instrs(&self, _: usize) -> Vec<Instr> {
-        self.instrs.clone()
+    fn gen_instrs(&self) -> &[Instr] {
+        &self.instrs
     }
 
     #[inline]
@@ -49,44 +51,32 @@ impl Generable for BlockFunc {
 
 impl Generable for CurriedFunc {
     #[inline]
-    fn gen_instrs(&self, span: usize) -> Vec<Instr> {
-        let op = if let StackVal::Function(f) = &self.op {
-            Instr::PushFunc(f.clone(), span)
-        } else {
-            Instr::Push(self.op.clone().as_value().unwrap(), span)
-        };
-
-        let mut s = Vec::with_capacity(self.len());
-        s.push(op);
-        s.extend(self.block.gen_instrs(span));
-        s
+    fn gen_instrs(&self) -> &[Instr] {
+        &self.instrs
     }
 
     #[inline]
     fn len(&self) -> usize {
-        1 + self.block.len()
+        self.instrs.len()
     }
 }
 
 impl Generable for ComposedFunc {
     #[inline]
-    fn gen_instrs(&self, span: usize) -> Vec<Instr> {
-        let mut s = Vec::with_capacity(self.len());
-        s.extend(self.block1.gen_instrs(span));
-        s.extend(self.block2.gen_instrs(span));
-        s
+    fn gen_instrs(&self) -> &[Instr] {
+        &self.instrs
     }
 
     #[inline]
     fn len(&self) -> usize {
-        self.block1.len() + self.block2.len()
+        self.instrs.len()
     }
 }
 
 impl Generable for SingleFunc {
     #[inline]
-    fn gen_instrs(&self, _: usize) -> Vec<Instr> {
-        vec![self.0.clone()]
+    fn gen_instrs(&self) -> &[Instr] {
+        &self.0
     }
 
     #[inline]
@@ -110,28 +100,41 @@ where
 impl CurriedFunc {
     #[inline]
     pub fn new(op: StackVal, block: Rc<dyn Generable>) -> Self {
-        Self { op, block }
+        let v = block.gen_instrs();
+        let mut s = Vec::with_capacity(v.len() + 1);
+        s.push(if let StackVal::Function(f) = op {
+            Instr::PushFunc(f.clone(), usize::MAX)
+        } else {
+            Instr::Push(op.as_value().unwrap(), usize::MAX)
+        });
+        s.extend(v.iter().cloned());
+        Self { instrs: s }
     }
 }
 
 impl ComposedFunc {
     #[inline]
     pub fn new(block1: Rc<dyn Generable>, block2: Rc<dyn Generable>) -> Self {
-        Self { block1, block2 }
+        let b1 = block1.gen_instrs();
+        let b2 = block2.gen_instrs();
+        let mut s = Vec::with_capacity(b1.len() + b2.len());
+        s.extend(b1.iter().cloned());
+        s.extend(b2.iter().cloned());
+        Self { instrs: s }
     }
 }
 
 impl From<Instr> for SingleFunc {
     #[inline]
     fn from(value: Instr) -> Self {
-        Self(value)
+        Self([value])
     }
 }
 
 impl fmt::Display for dyn Generable {
     #[inline]
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let instrs = self.gen_instrs(usize::MAX);
+        let instrs = self.gen_instrs();
         write!(f, "{{ ")?;
         for instr in instrs {
             write!(f, "{instr} ")?;

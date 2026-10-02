@@ -3,6 +3,8 @@ mod defs;
 pub use defs::BUILTIN_MAP;
 pub use defs::OP_MAP;
 
+pub use super::interpreter::Instr;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(C)]
 pub enum Operator {
@@ -109,6 +111,7 @@ pub enum Intrinsic {
     Timed,
     TimedEnd(std::time::Instant),
     DefineRegister,
+    LoopPartial(usize, usize),
     StackDump,
     SymDump,
 }

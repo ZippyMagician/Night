@@ -9,6 +9,7 @@ use crate::lexer::{LexTok, Token};
 use crate::scope::{Scope, ScopeInternal, StackVal};
 use crate::utils::error::{self, night_err, NightError, Span, Status};
 use crate::utils::function::{BlockFunc, Generable, SingleFunc};
+use crate::utils::span_instrs;
 use crate::value::Value;
 
 #[derive(Clone)]
@@ -50,6 +51,7 @@ pub struct Night {
     input: Box<str>,
     tokens: IntoIter<LexTok>,
     spans: Vec<Span>,
+    partials: Vec<Rc<[Instr]>>,
 
     // It's easier to use a deque, since I can use a while `pop_back` and then easily modify in between iterations
     instrs: VecDeque<Instr>,
@@ -77,6 +79,7 @@ impl Night {
             input: "".into(),
             tokens: vec![].into_iter(),
             spans: vec![],
+            partials: vec![],
             instrs: VecDeque::new(),
             scope: Rc::new(RefCell::new(ScopeInternal::create())),
             callback: vec![],
@@ -88,6 +91,7 @@ impl Night {
             input: self.input.clone(),
             tokens: vec![].into_iter(),
             spans: self.spans.clone(),
+            partials: self.partials.clone(),
             instrs: instrs.into(),
             scope: Rc::new(RefCell::new(self.scope.borrow().to_owned().clone())),
             callback: vec![],
@@ -443,7 +447,7 @@ impl Night {
             if let Instr::PushFunc(f, s) = &def[0] {
                 let mut instrs = Vec::with_capacity(f.len() + 2);
                 instrs.push(Instr::Guard(guard.clone(), self.spans.len() - 2));
-                instrs.extend(f.gen_instrs(*s));
+                instrs.extend(f.gen_instrs().iter().cloned());
                 instrs.push(Instr::GuardEnd(guard, self.spans.len() - 2));
                 self.instrs
                     .push_back(Instr::PushFunc(Rc::new(BlockFunc::from(instrs)), *s));
@@ -498,33 +502,42 @@ impl Night {
 
     // Unroll the loop to avoid excessive recursion
     #[inline]
-    pub fn exec_fn(&mut self, def: Vec<Instr>, from: usize) {
-        self.callback.push(from);
-        self.instrs.push_front(Instr::EndCallback);
-        for instr in def.into_iter().rev() {
-            self.instrs.push_front(instr);
+    pub fn exec_fn(&mut self, def: &[Instr], from: Option<usize>) {
+        if from.is_some() {
+            self.callback.push(from.unwrap());
+            self.instrs.push_front(Instr::EndCallback);
+        }
+        let span = self.callback[self.callback.len() - 1];
+        for instr in def.iter().rev().cloned() {
+            self.instrs.push_front(span_instrs(instr, span));
         }
     }
 
-    // Callback handled by caller
     #[inline(always)]
-    fn exec_fn_sparse(&mut self, def: &[Instr]) -> Status {
+    fn exec_fn_sparse(&mut self, def: &[Instr], from: usize) -> Status {
         for instr in def {
-            if let Instr::Intrinsic(intr, f) = instr {
-                self.exec_intrinsic(intr.clone(), *f, true)?;
-            } else if let Instr::PushSym(v, false, i) = instr {
-                let definition = self.scope.borrow().get_sym(v).cloned()?;
-                match definition {
-                    StackVal::Function(f) => {
-                        self.callback.push(*i);
-                        let instrs = f.gen_instrs(*i);
-                        self.exec_fn_sparse(&instrs)?;
-                        self.callback.pop();
+            match instr {
+                Instr::Intrinsic(intr, f) => self.exec_intrinsic(*intr, *f, true)?,
+                Instr::PushSym(v, false, i) => {
+                    let definition = self.scope.borrow().get_sym(v).cloned()?;
+                    match definition {
+                        StackVal::Function(f) => {
+                            self.callback.push(*i);
+                            let instrs = f.gen_instrs();
+                            self.exec_fn_sparse(&instrs, from)?;
+                            self.callback.pop();
+                        }
+                        StackVal::Value(v) => self.scope.borrow_mut().push_value(v),
                     }
-                    StackVal::Value(v) => self.scope.borrow_mut().push_value(v),
                 }
-            } else {
-                self.exec_instr(instr.clone())?;
+                // gen_instrs no longer takes span argument, I have to manually subsitute
+                Instr::Push(v, s) if *s == usize::MAX => {
+                    self.exec_instr(Instr::Push(v.clone(), from))?
+                }
+                Instr::PushFunc(f, s) if *s == usize::MAX => {
+                    self.exec_instr(Instr::PushFunc(f.clone(), from))?
+                }
+                _ => self.exec_instr(instr.clone())?,
             }
         }
 
@@ -543,7 +556,7 @@ impl Night {
                 let definition = self.scope.borrow().get_sym(&v).cloned()?;
                 match definition {
                     StackVal::Value(v) => self.scope.borrow_mut().push_value(v),
-                    StackVal::Function(f) => self.exec_fn(f.gen_instrs(i), i),
+                    StackVal::Function(f) => self.exec_fn(f.gen_instrs(), Some(i)),
                 }
             }
             PushSym(v, true, _) => {
@@ -597,6 +610,7 @@ impl Night {
             Intr::Call => self.exec_intr_call(from, sparse),
             Intr::If => self.exec_intr_if(from, sparse),
             Intr::Loop => self.exec_intr_loop(from),
+            Intr::LoopPartial(c, p) => self.exec_intr_loop_partial(from, c, p),
             Intr::Timed => self.exec_intr_timed(from),
             Intr::TimedEnd(t1) => self.exec_intr_timed_end(t1, from),
             Intr::DefineRegister => self.exec_intr_defr(from),
@@ -613,13 +627,14 @@ impl Night {
 
     fn exec_intr_call(&mut self, from: usize, sparse: bool) -> Status {
         let scope = self.scope.clone();
-        let def = scope.borrow_mut().pop()?.as_fn()?.gen_instrs(from);
-        if sparse {
-            self.callback.push(from);
-            self.exec_fn_sparse(&def)?;
-            self.callback.pop();
+        let def = scope.borrow_mut().pop()?.as_fn()?;
+        let instrs = def.gen_instrs();
+        if !sparse {
+            self.exec_fn(instrs, Some(from));
         } else {
-            self.exec_fn(def, from);
+            self.callback.push(from);
+            self.exec_fn_sparse(instrs, from)?;
+            self.callback.pop();
         }
 
         Ok(())
@@ -629,6 +644,8 @@ impl Night {
     // See Factor's implementation of `times`, the `night` version can be implemented
     // with the same logic.
     fn exec_intr_loop(&mut self, from: usize) -> Status {
+        const MAX_UNROLL: i64 = 100_000;
+
         let mut s = self.scope.borrow_mut();
         let def = s.pop()?.as_fn()?;
         let count = s.pop_value()?.as_int()?;
@@ -637,18 +654,41 @@ impl Night {
             return night_err!(Runtime, "'loop' can only take a positive integer.");
         }
 
-        let instrs = def.gen_instrs(from);
-        if count > 100 {
-            for _ in 0..count {
-                self.callback.push(from);
-                self.exec_fn_sparse(&instrs)?;
-                self.callback.pop();
-            }
+        let instrs = def.gen_instrs();
+        if count < MAX_UNROLL {
+            self.partials.push(instrs.into());
+            let index = self.partials.len() - 1;
+            self.callback.push(from);
+            self.instrs.push_front(Instr::EndCallback);
+            self.instrs.push_front(Instr::Intrinsic(
+                Intr::LoopPartial(count as usize, index),
+                from,
+            ));
         } else {
+            self.callback.push(from);
             for _ in 0..count {
-                self.exec_fn(instrs.clone(), from);
+                self.exec_fn_sparse(instrs, from)?;
             }
+            self.callback.pop();
         }
+        Ok(())
+    }
+
+    fn exec_intr_loop_partial(&mut self, from: usize, count: usize, index: usize) -> Status {
+        const MAX_ITERS: usize = 1000;
+        let c = usize::min(count, MAX_ITERS);
+        if count > MAX_ITERS {
+            self.instrs.push_front(Instr::Intrinsic(
+                Intr::LoopPartial(count - MAX_ITERS, index),
+                from,
+            ));
+        }
+        let def = self.partials[index].clone();
+        self.instrs.reserve(c * def.len());
+        for _ in 0..c {
+            self.exec_fn(&def, None);
+        }
+
         Ok(())
     }
 
@@ -659,13 +699,14 @@ impl Night {
         let cond = s.pop_value()?.as_bool()?;
         drop(s);
 
-        let def = (if cond { true_def } else { false_def }).gen_instrs(from);
-        if sparse {
-            self.callback.push(from);
-            self.exec_fn_sparse(&def)?;
-            self.callback.pop();
+        let def = if cond { true_def } else { false_def };
+        let instrs = def.gen_instrs();
+        if !sparse {
+            self.exec_fn(instrs, Some(from));
         } else {
-            self.exec_fn(def, from);
+            self.callback.push(from);
+            self.exec_fn_sparse(instrs, from)?;
+            self.callback.pop();
         }
 
         Ok(())
@@ -674,13 +715,13 @@ impl Night {
     fn exec_intr_timed(&mut self, from: usize) -> Status {
         let scope = self.scope.clone();
         let def = scope.borrow_mut().pop()?.as_fn()?;
-        let mut instrs = def.gen_instrs(from);
+        let mut instrs = def.gen_instrs().to_vec();
         instrs.reserve(1);
         instrs.push(Instr::Intrinsic(
             Intr::TimedEnd(std::time::Instant::now()),
             from,
         ));
-        self.exec_fn(instrs, from);
+        self.exec_fn(&instrs, Some(from));
         Ok(())
     }
 
