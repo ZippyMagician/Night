@@ -1,4 +1,5 @@
 use std::cell::RefCell;
+
 use std::collections::VecDeque;
 use std::fmt::{self, Debug, Display};
 use std::rc::Rc;
@@ -9,7 +10,6 @@ use crate::lexer::{LexTok, Token};
 use crate::scope::{Scope, ScopeInternal, StackVal};
 use crate::utils::error::{self, night_err, NightError, Span, Status};
 use crate::utils::function::{BlockFunc, Generable, SingleFunc};
-use crate::utils::span_instrs;
 use crate::value::Value;
 
 #[derive(Clone)]
@@ -507,9 +507,8 @@ impl Night {
             self.callback.push(from.unwrap());
             self.instrs.push_front(Instr::EndCallback);
         }
-        let span = self.callback[self.callback.len() - 1];
         for instr in def.iter().rev().cloned() {
-            self.instrs.push_front(span_instrs(instr, span));
+            self.instrs.push_front(instr);
         }
     }
 
@@ -529,13 +528,6 @@ impl Night {
                         }
                         StackVal::Value(v) => self.scope.borrow_mut().push_value(v),
                     }
-                }
-                // gen_instrs no longer takes span argument, I have to manually subsitute
-                Instr::Push(v, s) if *s == usize::MAX => {
-                    self.exec_instr(Instr::Push(v.clone(), from))?
-                }
-                Instr::PushFunc(f, s) if *s == usize::MAX => {
-                    self.exec_instr(Instr::PushFunc(f.clone(), from))?
                 }
                 _ => self.exec_instr(instr.clone())?,
             }
